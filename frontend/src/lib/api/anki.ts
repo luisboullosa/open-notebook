@@ -1,4 +1,3 @@
-import type { AxiosResponse } from 'axios'
 import apiClient from './client'
 
 // ============================================================================
@@ -19,7 +18,7 @@ export interface AnkiCard {
   image_metadata?: ImageMetadata
   audio_metadata?: AudioMetadata
   tags: string[]
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   created_at?: string
   updated_at?: string
 }
@@ -29,7 +28,7 @@ export interface AnkiDeck {
   name: string
   description?: string
   tags: string[]
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   created_at?: string
   updated_at?: string
 }

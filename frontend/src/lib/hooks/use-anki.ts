@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { AxiosError } from 'axios'
 import { ankiApi } from '@/lib/api/anki'
 import type {
   CardCreateRequest,
@@ -315,7 +316,7 @@ export function useTranscribeAudio() {
         description: `Score: ${scorePercent}% - "${result.transcribed_text}"`,
       })
     },
-    onError: (error: any) => {
+    onError: (error: AxiosError<{ detail?: string }>) => {
       toast({
         title: 'Error',
         description: error.response?.data?.detail || 'Failed to transcribe audio',
@@ -330,7 +331,6 @@ export function useTranscribeAudio() {
 // ============================================================================
 
 export function useCreateExportSession() {
-  const queryClient = useQueryClient()
   const { toast } = useToast()
 
   return useMutation({
