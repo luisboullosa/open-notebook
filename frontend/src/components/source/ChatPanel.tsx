@@ -172,28 +172,30 @@ export function ChatPanel({
                 <p className="text-xs mt-2">Ask questions to understand the content better</p>
               </div>
             ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex gap-3 ${
-                    message.type === 'human' ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  {message.type === 'ai' && (
-                    <div className="flex-shrink-0">
-                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Bot className="h-4 w-4" />
+              messages.map((message) => {
+                const isPending = message.id.startsWith('temp-')
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex gap-3 ${
+                      message.type === 'human' ? 'justify-end' : 'justify-start'
+                    } ${isPending ? 'opacity-60' : 'opacity-100'}`}
+                  >
+                    {message.type === 'ai' && (
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Bot className="h-4 w-4" />
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  <div className="flex flex-col gap-2 max-w-[80%]">
-                    <div
-                      className={`rounded-lg px-4 py-2 ${
-                        message.type === 'human'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted'
-                      }`}
-                    >
+                    )}
+                    <div className="flex flex-col gap-2 max-w-[80%]">
+                      <div
+                        className={`rounded-lg px-4 py-2 ${
+                          message.type === 'human'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted'
+                        }`}
+                      >
                       {message.type === 'ai' ? (
                         <AIMessageContent
                           content={message.content}
@@ -218,7 +220,8 @@ export function ChatPanel({
                     </div>
                   )}
                 </div>
-              ))
+                )
+              })
             )}
             {isStreaming && (
               <div className="flex gap-3 justify-start">

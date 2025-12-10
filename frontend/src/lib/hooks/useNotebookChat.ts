@@ -189,9 +189,10 @@ export function useNotebookChat({ notebookId, sources, notes, contextSelections 
       }
     }
 
-    // Add user message optimistically
+    // Add user message optimistically (with pending state)
+    const tempId = `temp-${Date.now()}`
     const userMessage: NotebookChatMessage = {
-      id: `temp-${Date.now()}`,
+      id: tempId,
       type: 'human',
       content: message,
       timestamp: new Date().toISOString()
@@ -209,8 +210,12 @@ export function useNotebookChat({ notebookId, sources, notes, contextSelections 
         model_override: modelOverride ?? (currentSession?.model_override ?? undefined)
       })
 
-      // Update messages with API response
-      setMessages(response.messages)
+      // Replace temp message with real messages from API
+      // Keep all non-temp messages and add the new ones
+      setMessages(prev => {
+        const withoutTemp = prev.filter(m => !m.id.startsWith('temp-'))
+        return response.messages
+      })
 
       // Refetch current session to get updated data
       await refetchCurrentSession()
