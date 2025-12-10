@@ -40,6 +40,11 @@ services:
       - "127.0.0.1:11434:11434"  # localhost only
     volumes:
       - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     # Optional: GPU support
     deploy:
       resources:
@@ -48,6 +53,35 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+  
+  ollama-setup:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Checking for required Ollama models..."
+        
+        # Essential models for Open Notebook
+        MODELS="mxbai-embed-large qwen2.5:3b"
+        
+        for model in $$MODELS; do
+          if ! ollama list | grep -q "$$model"; then
+            echo "Pulling $$model..."
+            ollama pull $$model
+          else
+            echo "$$model already exists, skipping..."
+          fi
+        done
+        
+        echo "Model setup complete!"
+    restart: "no"
     restart: unless-stopped
     # Single container includes all services: SurrealDB, API, Worker, and Next.js Frontend
     # Access:
