@@ -151,6 +151,7 @@ export default function DeckDetailPage() {
             if (!open) setSelectedCard(null)
           }}
           deckId={deckId}
+          card={selectedCard || undefined}
         />
       </div>
     </AppShell>

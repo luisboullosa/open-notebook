@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -13,21 +13,42 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useCreateCard } from '@/lib/hooks/use-anki'
+import { useCreateCard, useUpdateCard } from '@/lib/hooks/use-anki'
+import type { AnkiCard } from '@/lib/api/anki'
 
 interface CreateCardDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   deckId: string
+  card?: AnkiCard // Optional: if provided, we're editing
 }
 
-export function CreateCardDialog({ open, onOpenChange, deckId }: CreateCardDialogProps) {
+export function CreateCardDialog({ open, onOpenChange, deckId, card }: CreateCardDialogProps) {
   const [front, setFront] = useState('')
   const [back, setBack] = useState('')
   const [notes, setNotes] = useState('')
   const [tags, setTags] = useState('')
 
   const createCard = useCreateCard()
+  const updateCard = useUpdateCard()
+
+  const isEditing = !!card
+
+  // Populate form when editing
+  useEffect(() => {
+    if (card) {
+      setFront(card.front)
+      setBack(card.back)
+      setNotes(card.notes || '')
+      setTags(card.tags.join(', '))
+    } else {
+      // Reset form when creating new
+      setFront('')
+      setBack('')
+      setNotes('')
+      setTags('')
+    }
+  }, [card, open])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,15 +58,29 @@ export function CreateCardDialog({ open, onOpenChange, deckId }: CreateCardDialo
       .map((t) => t.trim())
       .filter((t) => t.length > 0)
 
-    await createCard.mutateAsync({
-      front,
-      back,
-      notes: notes || undefined,
-      deck_id: deckId,
-      tags: tagArray,
-    })
+    if (isEditing && card) {
+      // Update existing card
+      await updateCard.mutateAsync({
+        cardId: card.id,
+        data: {
+          front,
+          back,
+          notes: notes || undefined,
+          tags: tagArray,
+        },
+      })
+    } else {
+      // Create new card
+      await createCard.mutateAsync({
+        front,
+        back,
+        notes: notes || undefined,
+        deck_id: deckId,
+        tags: tagArray,
+      })
+    }
 
-    // Reset form
+    // Reset form and close
     setFront('')
     setBack('')
     setNotes('')
@@ -53,13 +88,17 @@ export function CreateCardDialog({ open, onOpenChange, deckId }: CreateCardDialo
     onOpenChange(false)
   }
 
+  const isPending = isEditing ? updateCard.isPending : createCard.isPending
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Create New Flashcard</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Flashcard' : 'Create New Flashcard'}</DialogTitle>
           <DialogDescription>
-            Add a new flashcard to your deck. You can add images and audio later.
+            {isEditing
+              ? 'Update the flashcard content and metadata.'
+              : 'Add a new flashcard to your deck. You can add images and audio later.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -108,8 +147,8 @@ export function CreateCardDialog({ open, onOpenChange, deckId }: CreateCardDialo
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!front.trim() || !back.trim() || createCard.isPending}>
-              {createCard.isPending ? 'Creating...' : 'Create Card'}
+            <Button type="submit" disabled={!front.trim() || !back.trim() || isPending}>
+              {isPending ? (isEditing ? 'Updating...' : 'Creating...') : isEditing ? 'Update Card' : 'Create Card'}
             </Button>
           </DialogFooter>
         </form>
