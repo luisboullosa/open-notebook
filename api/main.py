@@ -10,6 +10,7 @@ from loguru import logger
 
 from api.auth import PasswordAuthMiddleware
 from api.routers import (
+    anki,
     auth,
     chat,
     config,
@@ -97,6 +98,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(anki.router, prefix="/api", tags=["anki"])
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(config.router, prefix="/api", tags=["config"])
 app.include_router(notebooks.router, prefix="/api", tags=["notebooks"])

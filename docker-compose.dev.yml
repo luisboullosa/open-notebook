@@ -1,3 +1,24 @@
+# Development Environment Configuration
+# 
+# IMPORTANT: Hot Reload Limitations on Windows/macOS
+# =====================================================
+# Due to Docker volume mount limitations on Windows and macOS, file change events
+# from the host filesystem may not reliably propagate to the Linux container.
+# This affects Next.js hot reload (Fast Refresh) functionality.
+#
+# WORKAROUND:
+# - File changes ARE saved and synced to the container
+# - Backend API hot reload works (Uvicorn --reload)
+# - Frontend requires MANUAL BROWSER REFRESH (Ctrl+R / Cmd+R) to see changes
+# - Changes are immediate, just not automatically reflected in browser
+#
+# For full hot reload support, consider:
+# 1. Run frontend natively: cd frontend && npm run dev (port 3000)
+# 2. Use WSL2 and develop inside WSL2 filesystem (not /mnt/c/)
+# 3. Accept manual refresh workflow (recommended for simple changes)
+#
+# See DEVELOPMENT.md for detailed setup instructions.
+
 services:
   surrealdb:
     image: surrealdb/surrealdb:v2
@@ -9,10 +30,44 @@ services:
     pull_policy: always
     user: root
     restart: always
+  
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+  
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    container_name: whisper
+    ports:
+      - "127.0.0.1:9000:9000"
+    environment:
+      - ASR_MODEL=base
+      - ASR_ENGINE=openai_whisper
+    volumes:
+      - whisper-models:/root/.cache/whisper
+    restart: unless-stopped
+  
+  piper:
+    image: lscr.io/linuxserver/piper:latest
+    container_name: piper
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - piper-data:/config
+    ports:
+      - "127.0.0.1:10200:10200"
+    restart: unless-stopped
+  
   open_notebook:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     ports:
       - "8502:8502"
       - "5055:5055"
@@ -20,7 +75,27 @@ services:
       - ./docker.env
     depends_on:
       - surrealdb
+      - ollama
+      - whisper
+      - piper
     volumes:
       - ./notebook_data:/app/data
+      - .:/app  # Mount source code for live development
+      - frontend_node_modules:/app/frontend/node_modules  # Prevent overwriting node_modules
+      # Exclude Python cache for better performance
+      - /app/.venv
+      - /app/open_notebook.egg-info
+    environment:
+      - SURREAL_URL=ws://surrealdb:8000
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WHISPER_API_URL=http://whisper:9000
+      - PIPER_API_URL=http://piper:10200
+      - WATCHFILES_FORCE_POLLING=false  # Use native file watching (faster on most systems)
     restart: always
-    
+    command: ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+
+volumes:
+  ollama_data:
+  whisper-models:
+  piper-data:
+  frontend_node_modules:
