@@ -38,6 +38,19 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        limits:
+          memory: 16G  # Increased to improve stability for larger models; lower if host RAM is limited
+        reservations:
+          memory: 2G
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
@@ -59,7 +72,11 @@ services:
         echo "Checking for required Ollama models..."
         
         # Essential models for Open Notebook
-        MODELS="mxbai-embed-large qwen2.5:3b"
+        # mxbai-embed-large: Embeddings (669 MB)
+        # qwen2.5:1.5b: Small chat/transformation model (934 MB)
+        # qwen2.5:3b: Medium chat/transformation model (1.9 GB)
+        # qwen2.5:7b: Large chat/transformation model (4.7 GB)
+        MODELS="mxbai-embed-large:latest qwen2.5:1.5b qwen2.5:3b qwen2.5:7b"
         
         for model in $$MODELS; do
           if ! ollama list | grep -q "$$model"; then
@@ -84,19 +101,26 @@ services:
     volumes:
       - whisper-models:/root/.cache/whisper
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
   
   piper:
-    image: lscr.io/linuxserver/piper:latest
+    image: rhasspy/wyoming-piper:latest
     container_name: piper
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Etc/UTC
-    volumes:
-      - piper-data:/config
+    command: --voice en_GB-alan-medium --voice nl_NL-mls_5809-low
     ports:
       - "127.0.0.1:10200:10200"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/10200' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
   
   open_notebook:
     build:
@@ -108,10 +132,14 @@ services:
     env_file:
       - ./docker.env
     depends_on:
-      - surrealdb
-      - ollama
-      - whisper
-      - piper
+      surrealdb:
+        condition: service_started
+      ollama:
+        condition: service_healthy
+      whisper:
+        condition: service_started
+      piper:
+        condition: service_started
     volumes:
       - ./notebook_data:/app/data
       - .:/app  # Mount source code for live development

@@ -65,5 +65,14 @@ export const modelsApi = {
       }>
     }>('/models/validate')
     return response.data
+  },
+
+  syncOllamaModels: async () => {
+    const response = await apiClient.post<{
+      synced: number
+      skipped: number
+      total: number
+    }>('/models/ollama/sync')
+    return response.data
   }
 }

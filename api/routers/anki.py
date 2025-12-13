@@ -29,6 +29,7 @@ from api.anki_service import AnkiService
 from api.cefr_service import CEFRService
 from api.image_service import ImageService
 from api.audio_service import AudioService
+from api.anki_insights_service import anki_insights_service
 from open_notebook.domain.anki import (
     AnkiCard,
     AnkiDeck,
@@ -108,15 +109,13 @@ async def create_card(request: CardCreateRequest):
     try:
         service = AnkiService()
         
-        card = AnkiCard(
+        created_card = await service.create_card(
             front=request.front,
             back=request.back,
             notes=request.notes,
             deck_id=request.deck_id,
-            tags=request.tags
+            tags=request.tags,
         )
-        
-        created_card = await service.create_card(card)
         logger.info(f"Created card: {created_card.id}")
         
         return created_card
@@ -206,15 +205,18 @@ async def get_deck_cards(
     """Get all cards in a deck with pagination."""
     try:
         service = AnkiService()
-        deck = await service.get_deck_by_id(deck_id)
+        deck = await service.get_deck(deck_id)
         
         if not deck:
             raise HTTPException(status_code=404, detail="Deck not found")
         
         cards = await deck.get_cards()
+        logger.info(f"Retrieved {len(cards)} cards for deck {deck_id}")
         
         # Simple pagination
-        return cards[skip:skip + limit]
+        paginated_cards = cards[skip:skip + limit]
+        logger.info(f"Returning {len(paginated_cards)} cards after pagination (skip={skip}, limit={limit})")
+        return paginated_cards
         
     except HTTPException:
         raise
@@ -271,7 +273,7 @@ async def get_deck(deck_id: str):
     """Get a deck by ID."""
     try:
         service = AnkiService()
-        deck = await service.get_deck_by_id(deck_id)
+        deck = await service.get_deck(deck_id)
         
         if not deck:
             raise HTTPException(status_code=404, detail="Deck not found")
@@ -526,7 +528,7 @@ async def create_export_session(request: ExportSessionCreateRequest):
         # Get deck names for session naming
         deck_names = []
         for deck_id in request.deck_ids:
-            deck = await service.get_deck_by_id(deck_id)
+            deck = await service.get_deck(deck_id)
             if deck:
                 deck_names.append(deck.name)
         
@@ -572,4 +574,297 @@ async def get_export_session(session_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get export session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# AI Card Generation
+# ============================================================================
+
+
+class GenerateCardRequest(BaseModel):
+    """Request model for AI card generation."""
+    source_ids: List[str] = Field(..., description="List of source IDs to use as context")
+    user_prompt: str = Field(..., description="User's prompt/instructions for card generation")
+    model_id: Optional[str] = Field(None, description="Optional model override")
+    num_cards: int = Field(1, min=1, max=10, description="Number of cards to generate")
+
+
+class GeneratedCardPreview(BaseModel):
+    """Preview of an AI-generated card before adding to deck."""
+    front: str = Field(..., description="Card front (question/term)")
+    back: str = Field(..., description="Card back (answer/definition)")
+    notes: Optional[str] = Field(None, description="Additional notes")
+    suggested_tags: List[str] = Field(default_factory=list, description="AI-suggested tags")
+    source_references: List[str] = Field(default_factory=list, description="Source IDs used")
+
+
+class GenerateCardResponse(BaseModel):
+    """Response containing generated card previews."""
+    cards: List[GeneratedCardPreview] = Field(..., description="Generated card previews")
+    model_used: str = Field(..., description="Model used for generation")
+
+
+@router.post("/decks/{deck_id}/generate-cards", response_model=GenerateCardResponse)
+async def generate_cards_from_sources(
+    deck_id: str,
+    request: GenerateCardRequest
+):
+    """
+    Generate Anki flashcards from sources using AI.
+    
+    This endpoint takes source documents and a user prompt, then uses an AI model
+    to generate flashcard content. The generated cards are returned as previews
+    for the user to review and edit before adding to the deck.
+    """
+    logger.info(f"RECEIVED generate-cards request for deck {deck_id}")
+    logger.info(f"Request params: sources={request.source_ids}, num_cards={request.num_cards}")
+    try:
+        logger.info("Initializing AnkiService")
+        service = AnkiService()
+        logger.info("AnkiService initialized")
+        
+        # Verify deck exists
+        deck = await service.get_deck(deck_id)
+        if not deck:
+            raise HTTPException(status_code=404, detail="Deck not found")
+        
+        # Generate cards using AI
+        generated_cards = await service.generate_cards_with_ai(
+            source_ids=request.source_ids,
+            user_prompt=request.user_prompt,
+            model_id=request.model_id,
+            num_cards=request.num_cards
+        )
+        
+        return GenerateCardResponse(
+            cards=generated_cards["cards"],
+            model_used=generated_cards["model_used"]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate cards: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Anki Insights - Convert Transformation Insights to Cards
+# ============================================================================
+
+class InsightCardPreview(BaseModel):
+    """Preview of a card from an insight."""
+    front: str
+    back: str
+    notes: Optional[str] = None
+    suggested_tags: List[str] = Field(default_factory=list)
+    insight_id: str
+    insight_type: str
+
+
+class SourceAnkiInsightsResponse(BaseModel):
+    """Response containing Anki card insights for a source."""
+    source_id: str
+    insights: List[dict]  # List of {insight_id, insight_type, cards: [...]}
+    total_cards: int
+
+
+class NotebookAnkiInsightsResponse(BaseModel):
+    """Response containing Anki card insights for a notebook."""
+    notebook_id: str
+    sources: List[dict]  # List of {source_id, insights: [...], card_count: int}
+    total_cards: int
+
+
+class CreateCardsFromInsightRequest(BaseModel):
+    """Request to create Anki cards from an insight."""
+    card_indices: Optional[List[int]] = None  # If None, create all cards
+
+
+@router.get("/sources/{source_id}/anki-insights", response_model=SourceAnkiInsightsResponse)
+async def get_source_anki_insights(source_id: str):
+    """
+    Get all Anki card insights for a source with parsed cards.
+    
+    This endpoint retrieves transformation insights that contain Anki cards
+    (e.g., from "Anki Cards - Dutch A2" transformations) and parses them
+    into structured card data.
+    """
+    try:
+        insights_with_cards = await anki_insights_service.get_anki_insights_for_source(source_id)
+        
+        insights_data = []
+        total_cards = 0
+        
+        for insight, cards in insights_with_cards:
+            insights_data.append({
+                "insight_id": insight.id,
+                "insight_type": insight.insight_type,
+                "created": insight.created.isoformat() if insight.created else None,
+                "cards": cards,
+                "card_count": len(cards)
+            })
+            total_cards += len(cards)
+        
+        return SourceAnkiInsightsResponse(
+            source_id=source_id,
+            insights=insights_data,
+            total_cards=total_cards
+        )
+    except Exception as e:
+        logger.error(f"Failed to get Anki insights for source {source_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/notebooks/{notebook_id}/anki-insights", response_model=NotebookAnkiInsightsResponse)
+async def get_notebook_anki_insights(notebook_id: str):
+    """
+    Get all Anki card insights for all sources in a notebook.
+    
+    This endpoint retrieves all transformation insights that contain Anki cards
+    from all sources in the notebook, grouped by source.
+    """
+    try:
+        insights_with_cards = await anki_insights_service.get_anki_insights_for_notebook(notebook_id)
+        
+        # Group by source
+        sources_dict = {}
+        for insight, source_id, cards in insights_with_cards:
+            if source_id not in sources_dict:
+                sources_dict[source_id] = {
+                    "source_id": source_id,
+                    "insights": [],
+                    "card_count": 0
+                }
+            
+            sources_dict[source_id]["insights"].append({
+                "insight_id": insight.id,
+                "insight_type": insight.insight_type,
+                "created": insight.created.isoformat() if insight.created else None,
+                "cards": cards,
+                "card_count": len(cards)
+            })
+            sources_dict[source_id]["card_count"] += len(cards)
+        
+        sources_data = list(sources_dict.values())
+        total_cards = sum(s["card_count"] for s in sources_data)
+        
+        return NotebookAnkiInsightsResponse(
+            notebook_id=notebook_id,
+            sources=sources_data,
+            total_cards=total_cards
+        )
+    except Exception as e:
+        logger.error(f"Failed to get Anki insights for notebook {notebook_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/decks/{deck_id}/insights/{insight_id}/create-cards")
+async def create_cards_from_insight(
+    deck_id: str,
+    insight_id: str,
+    request: CreateCardsFromInsightRequest
+):
+    """
+    Create Anki cards in a deck from a transformation insight.
+    
+    This endpoint parses an Anki card insight and creates actual cards in the deck.
+    You can optionally specify which cards to create by index.
+    """
+    try:
+        from open_notebook.domain.notebook import SourceInsight
+        
+        # Get the insight
+        insight = await SourceInsight.get(insight_id)
+        if not insight:
+            raise HTTPException(status_code=404, detail="Insight not found")
+        
+        # Check if it's an Anki insight
+        if not anki_insights_service.is_anki_insight(insight.insight_type):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Insight type '{insight.insight_type}' is not an Anki card insight"
+            )
+        
+        # Parse cards from insight
+        cards = anki_insights_service.parse_cards_from_insight(insight.content)
+        if not cards:
+            raise HTTPException(status_code=400, detail="No valid cards found in insight")
+        
+        # Filter by indices if specified
+        if request.card_indices is not None:
+            cards = [cards[i] for i in request.card_indices if 0 <= i < len(cards)]
+        
+        # Create the cards with media generation
+        anki_service = AnkiService()
+        from api.image_service import ImageService
+        from api.audio_service import AudioService
+        
+        image_service = ImageService()
+        audio_service = AudioService()
+        created_cards = []
+        
+        for card_data in cards:
+            # Create base card
+            card = await anki_service.create_card(
+                deck_id=deck_id,
+                front=card_data.get("front", ""),
+                back=card_data.get("back", ""),
+                notes=card_data.get("notes"),
+                tags=card_data.get("suggested_tags", [])
+            )
+            
+            # Generate image if image_query is provided
+            if card_data.get("image_query"):
+                try:
+                    image_meta = await image_service.search_image(
+                        query=card_data["image_query"],
+                        provider="unsplash"  # Can be made configurable
+                    )
+                    if image_meta:
+                        await anki_service.set_card_image(str(card.id), image_meta)
+                        card.image_metadata = image_meta
+                except Exception as e:
+                    logger.warning(f"Failed to fetch image for card {card.id}: {e}")
+            
+            # Generate audio if audio_text is provided
+            if card_data.get("audio_text"):
+                try:
+                    audio_language = card_data.get("audio_language", "nl")
+                    # Map language to appropriate voice
+                    voice_map = {
+                        "nl": "nl_NL-rdh-medium",
+                        "nl-BE": "nl_BE-rdh-medium",
+                        "en": "en_US-lessac-medium",
+                        "es": "es_ES-mls-medium",
+                        "fr": "fr_FR-mls-medium",
+                        "de": "de_DE-thorsten-medium",
+                    }
+                    voice = voice_map.get(audio_language, "nl_NL-rdh-medium")
+                    
+                    audio_meta = await audio_service.generate_reference_audio(
+                        text=card_data["audio_text"],
+                        card_id=str(card.id),
+                        language=audio_language,
+                        voice=voice
+                    )
+                    if audio_meta:
+                        await anki_service.set_card_audio(str(card.id), audio_meta)
+                        card.audio_metadata = audio_meta
+                except Exception as e:
+                    logger.warning(f"Failed to generate audio for card {card.id}: {e}")
+            
+            created_cards.append(card)
+        
+        return {
+            "success": True,
+            "cards_created": len(created_cards),
+            "cards": [{"id": c.id, "front": c.front} for c in created_cards]
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create cards from insight: {e}")
         raise HTTPException(status_code=500, detail=str(e))

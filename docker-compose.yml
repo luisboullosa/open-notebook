@@ -30,9 +30,12 @@ services:
       - PIPER_API_URL=http://piper:10200
       - DOCKER_HOST=tcp://host.docker.internal:2375
     depends_on:
-      - ollama
-      - whisper
-      - piper
+      ollama:
+        condition: service_healthy
+      whisper:
+        condition: service_started
+      piper:
+        condition: service_started
     restart: always
   ollama:
     image: ollama/ollama:latest
@@ -81,7 +84,6 @@ services:
         done
         
         echo "Model setup complete!"
-    restart: "no"
     restart: unless-stopped
     # Single container includes all services: SurrealDB, API, Worker, and Next.js Frontend
     # Access:
@@ -107,19 +109,25 @@ services:
               count: 1
               capabilities: [gpu]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
   piper:
-    image: lscr.io/linuxserver/piper:latest
+    image: rhasspy/wyoming-piper:latest
     container_name: piper
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Etc/UTC
-      - PIPER_VOICE=en_US-lessac-medium
-    volumes:
-      - piper_data:/config
+    command: --voice en_GB-alan-medium --voice nl_NL-mls_5809-low
     ports:
       - "127.0.0.1:10200:10200"  # localhost only
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/10200' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   open-notebook-data:

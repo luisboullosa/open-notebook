@@ -287,6 +287,85 @@ export const ankiApi = {
       return response.data
     },
   },
+
+  // ============================================================================
+  // AI Card Generation
+  // ============================================================================
+
+  generateCards: async (deckId: string, data: {
+    source_ids: string[]
+    user_prompt: string
+    model_id?: string
+    num_cards?: number
+  }) => {
+    const response = await apiClient.post<{
+      cards: {
+        front: string
+        back: string
+        notes?: string
+        suggested_tags: string[]
+        source_references: string[]
+      }[]
+      model_used: string
+    }>(`/anki/decks/${encodeURIComponent(deckId)}/generate-cards`, data)
+    return response.data
+  },
+
+  // Get Anki card insights from transformations
+  getSourceAnkiInsights: async (sourceId: string) => {
+    const response = await apiClient.get<{
+      source_id: string
+      insights: Array<{
+        insight_id: string
+        insight_type: string
+        created: string | null
+        cards: Array<{
+          front: string
+          back: string
+          notes?: string
+          suggested_tags: string[]
+        }>
+        card_count: number
+      }>
+      total_cards: number
+    }>(`/anki/sources/${encodeURIComponent(sourceId)}/anki-insights`)
+    return response.data
+  },
+
+  getNotebookAnkiInsights: async (notebookId: string) => {
+    const response = await apiClient.get<{
+      notebook_id: string
+      sources: Array<{
+        source_id: string
+        insights: Array<{
+          insight_id: string
+          insight_type: string
+          created: string | null
+          cards: Array<{
+            front: string
+            back: string
+            notes?: string
+            suggested_tags: string[]
+          }>
+          card_count: number
+        }>
+        card_count: number
+      }>
+      total_cards: number
+    }>(`/anki/notebooks/${encodeURIComponent(notebookId)}/anki-insights`)
+    return response.data
+  },
+
+  createCardsFromInsight: async (deckId: string, insightId: string, cardIndices?: number[]) => {
+    const response = await apiClient.post<{
+      success: boolean
+      cards_created: number
+      cards: Array<{ id: string; front: string }>
+    }>(`/anki/decks/${encodeURIComponent(deckId)}/insights/${encodeURIComponent(insightId)}/create-cards`, {
+      card_indices: cardIndices
+    })
+    return response.data
+  },
 }
 
 export default ankiApi

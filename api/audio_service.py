@@ -20,7 +20,7 @@ from phonemizer.backend import EspeakBackend
 from typing import Optional
 
 from open_notebook.domain.anki import AnkiCard, AudioMetadata
-from api.anki_service import AnkiService
+from open_notebook.config import UPLOADS_FOLDER
 
 
 class AudioService:
@@ -35,14 +35,10 @@ class AudioService:
     AUDIO_BITRATE = "128k"
     AUDIO_EXPIRY_DAYS = 30
     
-    def __init__(self, data_dir: Path = None):
-        """Initialize audio service.
-        
-        Args:
-            data_dir: Base directory for storing audio files. Defaults to settings.
-        """
-        self.data_dir = data_dir or Path(settings.data_dir)
-        self.audio_dir = self.data_dir / "anki_data" / "audio"
+    def __init__(self):
+        """Initialize audio service."""
+        logger.info("Initializing Audio service")
+        self.audio_dir = Path(UPLOADS_FOLDER) / "anki_data" / "audio"
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize phonemizer backend

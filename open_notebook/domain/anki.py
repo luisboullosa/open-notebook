@@ -150,7 +150,7 @@ class AnkiDeck(ObjectModel):
         try:
             cards = await repo_query(
                 "SELECT * FROM anki_card WHERE deck_id = $deck_id ORDER BY created DESC",
-                {"deck_id": ensure_record_id(self.id)}
+                {"deck_id": self.id}  # Use string ID directly, not RecordID
             )
             return [AnkiCard(**card) for card in cards] if cards else []
         except Exception as e:
@@ -162,7 +162,7 @@ class AnkiDeck(ObjectModel):
         try:
             result = await repo_query(
                 "SELECT count() as count FROM anki_card WHERE deck_id = $deck_id GROUP ALL",
-                {"deck_id": ensure_record_id(self.id)}
+                {"deck_id": self.id}  # Use string ID directly, not RecordID
             )
             return result[0]["count"] if result else 0
         except Exception as e:

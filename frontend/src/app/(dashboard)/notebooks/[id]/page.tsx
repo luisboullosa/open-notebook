@@ -16,6 +16,7 @@ import { useIsDesktop } from '@/lib/hooks/use-media-query'
 import { cn } from '@/lib/utils'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FileText, StickyNote, MessageSquare } from 'lucide-react'
+import { AnkiInsightsPanel } from '@/components/anki/AnkiInsightsPanel'
 
 export type ContextMode = 'off' | 'insights' | 'full'
 
@@ -211,10 +212,15 @@ export default function NotebookPage() {
             </div>
 
             {/* Chat Column - always expanded, takes remaining space */}
-            <div className="transition-all duration-150 flex-1">
+            <div className="transition-all duration-150 flex-1 space-y-6">
               <ChatColumn
                 notebookId={notebookId}
                 contextSelections={contextSelections}
+              />
+              
+              {/* Anki Insights Panel */}
+              <AnkiInsightsPanel
+                notebookId={notebookId}
               />
             </div>
           </div>

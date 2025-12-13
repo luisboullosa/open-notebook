@@ -394,6 +394,142 @@ class AnkiService:
         except Exception as e:
             logger.warning(f"Error deleting file {file_path}: {str(e)}")
 
+    # ===== AI Card Generation =====
+
+    async def generate_cards_with_ai(
+        self,
+        source_ids: List[str],
+        user_prompt: str,
+        model_id: Optional[str] = None,
+        num_cards: int = 1
+    ) -> Dict:
+        """
+        Generate flashcards from sources using AI.
+        
+        Args:
+            source_ids: List of source document IDs to use as context
+            user_prompt: User's instructions for card generation
+            model_id: Optional model override
+            num_cards: Number of cards to generate
+            
+        Returns:
+            Dictionary with 'cards' list and 'model_used' string
+        """
+        from open_notebook.domain.notebook import Source
+        from open_notebook.graphs.utils import provision_langchain_model
+        from ai_prompter import Prompter
+        import json
+        
+        try:
+            from open_notebook.database.repository import repo_query
+            
+            logger.info(f"Starting card generation for {len(source_ids)} sources")
+            
+            # Fetch source content with full_text explicitly
+            sources = []
+            for source_id in source_ids:
+                logger.debug(f"Fetching source: {source_id}")
+                # Use Source.get() which properly fetches all fields
+                source = await Source.get(source_id)
+                logger.debug(f"Source fetched: {source_id}")
+                
+                if source and source.full_text:
+                    sources.append({
+                        "id": source.id,
+                        "title": source.title or "Untitled",
+                        "content": source.full_text[:5000]  # Limit to first 5000 chars
+                    })
+                    logger.debug(f"Source {source_id} added with {len(source.full_text)} chars of text")
+                else:
+                    logger.warning(f"Source {source_id} has no full_text")
+            
+            if not sources:
+                raise InvalidInputError(
+                    "No valid sources found with text content. "
+                    "Selected sources may not have been processed yet, or they may be "
+                    "file-based sources (PDFs, images) where text extraction hasn't completed. "
+                    "Please wait for source processing to finish, or select text-based sources."
+                )
+            
+            # Build context from sources
+            context_text = "\n\n---\n\n".join([
+                f"Source: {s['title']}\n{s['content']}"
+                for s in sources
+            ])
+            
+            # Create prompt for card generation
+            system_prompt = Prompter(prompt_template="anki_card_generation").render(data={
+                "context": context_text,
+                "user_prompt": user_prompt,
+                "num_cards": num_cards
+            })
+            
+            # Get AI model
+            # Note: model_id from user is Ollama model name, not a database ID
+            # Let provision_langchain_model use the default transformation model
+            model = await provision_langchain_model(
+                content=system_prompt,
+                model_id=None,  # Use default transformation model
+                default_type="transformation",
+                max_tokens=4096
+            )
+            
+            # Generate cards
+            response = await model.ainvoke(system_prompt)
+            
+            # Parse response (expecting JSON array of cards)
+            try:
+                # Extract JSON from response
+                content = response.content if hasattr(response, 'content') else str(response)
+                
+                # Try to find JSON in the response
+                import re
+                json_match = re.search(r'\[.*\]', content, re.DOTALL)
+                if json_match:
+                    cards_data = json.loads(json_match.group(0))
+                else:
+                    # Fallback: parse as single card
+                    cards_data = [{
+                        "front": "Generated Question",
+                        "back": content,
+                        "notes": None,
+                        "suggested_tags": []
+                    }]
+                
+                # Format cards
+                cards = []
+                for card_data in cards_data[:num_cards]:
+                    cards.append({
+                        "front": card_data.get("front", ""),
+                        "back": card_data.get("back", ""),
+                        "notes": card_data.get("notes"),
+                        "suggested_tags": card_data.get("suggested_tags", []),
+                        "source_references": source_ids
+                    })
+                
+                return {
+                    "cards": cards,
+                    "model_used": model_id or "default"
+                }
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse AI response as JSON: {e}")
+                # Return raw response as single card
+                return {
+                    "cards": [{
+                        "front": "AI Generated Card",
+                        "back": response.content if hasattr(response, 'content') else str(response),
+                        "notes": "Note: Failed to parse structured response",
+                        "suggested_tags": [],
+                        "source_references": source_ids
+                    }],
+                    "model_used": model_id or "default"
+                }
+                
+        except Exception as e:
+            logger.error(f"Error generating cards with AI: {e}")
+            raise DatabaseOperationError(e)
+
 
 # Global service instance
 anki_service = AnkiService()

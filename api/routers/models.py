@@ -351,12 +351,97 @@ async def get_available_ollama_models() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Error fetching Ollama models: {str(e)}")
 
 
+@router.post("/models/ollama/sync")
+async def sync_ollama_models() -> Dict[str, Any]:
+    """Auto-sync Ollama models to database - adds new ones, doesn't remove existing."""
+    try:
+        ollama_base = os.environ.get("OLLAMA_API_BASE")
+        if not ollama_base:
+            raise HTTPException(
+                status_code=503, 
+                detail="Ollama is not configured. Set OLLAMA_API_BASE environment variable."
+            )
+        
+        # Get models from Ollama
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                response = await client.get(f"{ollama_base}/api/tags")
+                response.raise_for_status()
+                data = response.json()
+            except Exception as e:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Cannot connect to Ollama: {str(e)}"
+                )
+        
+        if "models" not in data:
+            return {"synced": 0, "skipped": 0, "total": 0}
+        
+        synced = 0
+        skipped = 0
+        
+        from open_notebook.database.repository import repo_query
+        
+        for ollama_model in data["models"]:
+            model_name = ollama_model.get("name", "")
+            if not model_name:
+                continue
+            
+            # Determine model type based on name patterns
+            model_type = "language"  # Default
+            if "embed" in model_name.lower():
+                model_type = "embedding"
+            elif "whisper" in model_name.lower():
+                model_type = "speech_to_text"
+            
+            # Check if model already exists (case-insensitive)
+            existing = await repo_query(
+                "SELECT * FROM model WHERE string::lowercase(provider) = 'ollama' AND string::lowercase(name) = $name LIMIT 1",
+                {"name": model_name.lower()}
+            )
+            
+            if existing:
+                skipped += 1
+                continue
+            
+            # Create new model
+            new_model = Model(
+                name=model_name,
+                provider="ollama",
+                type=model_type,
+            )
+            await new_model.save()
+            synced += 1
+            logger.info(f"Auto-synced Ollama model: {model_name} (type: {model_type})")
+        
+        return {
+            "synced": synced,
+            "skipped": skipped,
+            "total": len(data["models"])
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error syncing Ollama models: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error syncing Ollama models: {str(e)}")
+
+
 @router.get("/models/validate")
 async def validate_configured_models() -> Dict[str, Any]:
     """Validate that configured default models exist in Ollama."""
     try:
-        # Get default models
-        defaults = await DefaultModels.get_defaults()
+        # Get default models - handle case where they don't exist yet
+        try:
+            defaults = await DefaultModels.get_defaults()
+        except Exception as e:
+            logger.warning(f"Could not get default models (may not be initialized yet): {e}")
+            # Return empty validation if defaults not set up yet
+            return {
+                "valid": True,
+                "missing_models": [],
+                "available_ollama_models": [],
+                "details": {}
+            }
         
         # Get available Ollama models
         ollama_models = []

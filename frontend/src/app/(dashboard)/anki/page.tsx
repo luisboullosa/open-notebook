@@ -17,7 +17,7 @@ export default function AnkiPage() {
   const deleteDeck = useDeleteDeck()
 
   const handleDeckClick = (deckId: string) => {
-    router.push(`/anki/${deckId}`)
+    router.push(`/anki/${encodeURIComponent(deckId)}`)
   }
 
   const handleEditDeck = (deck: AnkiDeck) => {
