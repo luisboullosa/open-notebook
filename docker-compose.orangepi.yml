@@ -24,20 +24,15 @@ services:
     ports:
       - "8502:8502"  # Frontend - accessible from LAN
       - "5055:5055"  # API - accessible from LAN
-    # Use the OrangePi-specific env overrides
     env_file:
-      - ./docker.orangepi.env
+      - ./docker.env
     volumes:
       - ./notebook_data:/app/data
       - ./surreal_single_data:/mydata
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
-      # Container-accessible services (avoid localhost inside container)
       - WHISPER_API_URL=http://whisper:9000
       - PIPER_API_URL=http://piper:10200
-      # Wyoming TCP host/port used as TTS fallback in absence of HTTP proxy
-      - PIPER_WYOMING_HOST=piper
-      - PIPER_WYOMING_PORT=10200
     depends_on:
       - ollama
       - whisper
@@ -100,9 +95,8 @@ services:
     # Remove GPU support
     restart: unless-stopped
 
-  # Piper: prefer the Wyoming-compatible image used in dev (provides TCP "Wyoming" interface)
   piper:
-    image: rhasspy/wyoming-piper:latest
+    image: lscr.io/linuxserver/piper:latest
     container_name: piper
     environment:
       - PUID=1000
@@ -112,24 +106,8 @@ services:
     volumes:
       - piper_data:/config
     ports:
-      - "10200:10200"  # Wyoming TCP port exposed
+      - "10200:10200"  # Accessible from LAN
     restart: unless-stopped
-
-  # Optional: lightweight HTTP proxy for Piper. Uncomment to expose an HTTP /api/tts
-  # service that forwards to Piper's Wyoming TCP interface. Useful for development
-  # when the Open Notebook service expects an HTTP TTS endpoint.
-  # piper-http-proxy:
-  #   image: python:3.11-slim
-  #   container_name: piper-http-proxy
-  #   depends_on:
-  #     - piper
-  #   volumes:
-  #     - ./scripts/archived/piper_http_proxy.py:/app/piper_http_proxy.py:ro
-  #   working_dir: /app
-  #   command: ["python", "piper_http_proxy.py"]
-  #   ports:
-  #     - "5000:5000"
-  #   restart: unless-stopped
 
 volumes:
   open-notebook-data:

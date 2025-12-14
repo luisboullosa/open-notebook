@@ -121,25 +121,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-
-  piper-http-proxy:
-    image: python:3.11-slim
-    container_name: piper-http-proxy
-    depends_on:
-      - piper
-    volumes:
-      - ./scripts:/app/scripts:ro
-    working_dir: /app/scripts
-    command: ["python", "piper_http_proxy.py"]
-    ports:
-      - "127.0.0.1:5000:5000"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/api/tts" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
   
   open_notebook:
     build:
@@ -170,7 +151,7 @@ services:
       - SURREAL_URL=ws://surrealdb:8000
       - OLLAMA_BASE_URL=http://ollama:11434
       - WHISPER_API_URL=http://whisper:9000
-      - PIPER_API_URL=http://piper-http-proxy:5000
+      - PIPER_API_URL=http://piper:10200
       - WATCHFILES_FORCE_POLLING=false  # Use native file watching (faster on most systems)
     restart: always
     command: ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

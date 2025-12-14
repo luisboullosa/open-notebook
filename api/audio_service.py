@@ -18,8 +18,6 @@ from pathlib import Path
 from phonemizer import phonemize
 from phonemizer.backend import EspeakBackend
 from typing import Optional
-import socket
-import json
 
 from open_notebook.domain.anki import AnkiCard, AudioMetadata
 from open_notebook.config import UPLOADS_FOLDER
@@ -29,9 +27,8 @@ class AudioService:
     """Service for audio generation, transcription, and phonetic analysis."""
     
     # Service URLs from environment or defaults
-    # Prefer localhost defaults so services running on host are reachable
-    WHISPER_URL = os.getenv("WHISPER_API_URL", "http://127.0.0.1:9000")
-    PIPER_URL = os.getenv("PIPER_API_URL", "http://127.0.0.1:10200")
+    WHISPER_URL = os.getenv("WHISPER_API_URL", "http://whisper:9000")
+    PIPER_URL = os.getenv("PIPER_API_URL", "http://piper:10200")
     
     # Audio settings
     AUDIO_FORMAT = "mp3"
@@ -115,138 +112,28 @@ class AudioService:
             logger.debug(f"Using cached audio: {output_path}")
             return output_path
         
-        # First try HTTP-based TTS if Piper exposes an HTTP API
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
+                # Piper API expects JSON with text and voice
                 response = await client.post(
                     f"{self.PIPER_URL}/api/tts",
-                    json={"text": text, "voice": voice, "output_format": "mp3"},
+                    json={
+                        "text": text,
+                        "voice": voice,
+                        "output_format": "mp3"
+                    }
                 )
-                if response.status_code == 200 and response.content:
-                    output_path.write_bytes(response.content)
-                    logger.debug(f"Generated audio via Piper HTTP: {output_path}")
-                    return output_path
-                else:
-                    logger.debug(f"Piper HTTP returned status {response.status_code}, falling back to Wyoming TCP")
-        except Exception as e:
-            logger.debug(f"Piper HTTP probe failed: {e}; will try Wyoming TCP fallback")
-
-        # Fallback: use Wyoming protocol over TCP to request synthesis
-        try:
-            wyoming_bytes = await self._synthesize_via_wyoming(text=text, voice=voice)
-            if wyoming_bytes:
-                output_path.write_bytes(wyoming_bytes)
-                logger.debug(f"Generated audio via Piper WYOMING TCP: {output_path}")
-                return output_path
-            else:
-                raise RuntimeError("Wyoming synth produced no audio bytes")
-        except Exception as e:
-            logger.error(f"Piper TTS failed (HTTP + WYOMING): {e}")
+                response.raise_for_status()
+                
+                # Save audio file
+                output_path.write_bytes(response.content)
+                logger.debug(f"Generated audio via Piper: {output_path}")
+                
+        except httpx.HTTPError as e:
+            logger.error(f"Piper TTS failed: {e}")
             raise RuntimeError(f"Failed to generate audio: {e}")
         
         return output_path
-
-    async def _synthesize_via_wyoming(self, text: str, voice: str) -> bytes:
-        """Use the Wyoming JSONL/TCP protocol to request TTS from Piper.
-
-        This opens a TCP socket to the host/port in `PIPER_URL`, sends a
-        single-line JSON header with type 'synthesize' and waits for
-        audio-start/audio-chunk/audio-stop events, concatenating payloads.
-        Returns raw audio bytes as received from the service.
-        """
-        # Parse host and port from PIPER_URL (expect http://host:port or host:port)
-        try:
-            url = self.PIPER_URL
-            if url.startswith("http://"):
-                url = url[len("http://") :]
-            host, port_s = url.split(":")[:2]
-            port = int(port_s)
-        except Exception:
-            # default to localhost:10200
-            host, port = "127.0.0.1", 10200
-
-        logger.debug(f"Connecting to Wyoming Piper at {host}:{port}")
-
-        # Connect with a short timeout. Try the parsed port first, then fall
-        # back to the common Wyoming port 10200 if that fails (compose often
-        # exposes HTTP on 5000 while Wyoming listens on 10200).
-        def _try_connect(h: str, p: int):
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(6)
-            try:
-                s.connect((h, p))
-                return s
-            except Exception:
-                try:
-                    s.close()
-                except Exception:
-                    pass
-                return None
-
-        sock = _try_connect(host, port)
-        if sock is None and port != 10200:
-            sock = _try_connect(host, 10200)
-        if sock is None:
-            raise RuntimeError(f"Failed to connect to piper wyoming socket on {host}:{port} and {host}:10200")
-
-        try:
-            # Build header
-            header = {"type": "synthesize", "data": {"text": text, "voice": voice}}
-            header_line = json.dumps(header, ensure_ascii=False) + "\n"
-            sock.sendall(header_line.encode("utf-8"))
-
-            collected = bytearray()
-
-            # Helper to read exactly n bytes
-            def _read_n(n: int) -> bytes:
-                buf = bytearray()
-                while len(buf) < n:
-                    chunk = sock.recv(n - len(buf))
-                    if not chunk:
-                        break
-                    buf.extend(chunk)
-                return bytes(buf)
-
-            # Read loop: headers are JSON lines ending with '\n'
-            while True:
-                # Read header line until newline
-                header_bytes = bytearray()
-                while True:
-                    ch = sock.recv(1)
-                    if not ch:
-                        break
-                    if ch == b"\n":
-                        break
-                    header_bytes.extend(ch)
-                if not header_bytes:
-                    break
-                try:
-                    hdr = json.loads(header_bytes.decode("utf-8"))
-                except Exception:
-                    # malformed header; stop
-                    break
-
-                typ = hdr.get("type")
-                # If there is extra JSON data following the header, read it
-                data_len = int(hdr.get("data_length", 0) or 0)
-                if data_len:
-                    _ = _read_n(data_len)  # currently ignore extra data
-
-                payload_len = int(hdr.get("payload_length", 0) or 0)
-                if payload_len:
-                    payload = _read_n(payload_len)
-                    collected.extend(payload)
-
-                if typ == "audio-stop":
-                    break
-
-            return bytes(collected)
-        finally:
-            try:
-                sock.shutdown(socket.SHUT_RDWR)
-            except Exception:
-                pass
-            sock.close()
     
     async def transcribe_user_recording(
         self,
@@ -281,7 +168,7 @@ class AudioService:
         logger.info(f"Transcription: '{transcribed_text}' | Score: {score:.2f}")
         return transcribed_text, user_ipa, score
     
-    async def _whisper_transcribe(self, audio_file: Path, language: Optional[str] = None) -> str:
+    async def _whisper_transcribe(self, audio_file: Path) -> str:
         """Transcribe audio using Whisper service.
         
         Args:
@@ -290,44 +177,20 @@ class AudioService:
         Returns:
             Transcribed text
         """
-        # If language isn't provided, attempt autodetect via the Whisper detect-language endpoint
-        detected_lang = None
         try:
-            if language is None:
-                try:
-                    async with httpx.AsyncClient(timeout=30.0) as client:
-                        with open(audio_file, "rb") as f:
-                            files = {"audio_file": (audio_file.name, f, "audio/mpeg")}
-                            resp = await client.post(f"{self.WHISPER_URL}/detect-language", files=files)
-                            resp.raise_for_status()
-                            j = resp.json()
-                            detected_lang = j.get("language_code") or j.get("detected_language")
-                            confidence = j.get("confidence")
-                            logger.debug(f"Whisper detect-language returned: {detected_lang} (confidence={confidence})")
-                            # Normalize common language names to short codes
-                            if detected_lang and len(detected_lang) > 2:
-                                name = str(detected_lang).lower()
-                                mapping = {"english": "en", "dutch": "nl", "nederlands": "nl"}
-                                detected_lang = mapping.get(name, detected_lang)
-                            language = detected_lang or "nl"
-                except Exception as e:
-                    logger.debug(f"Language autodetect failed: {e}; defaulting to Dutch")
-                    language = "nl"
-
             async with httpx.AsyncClient(timeout=60.0) as client:
                 with open(audio_file, "rb") as f:
                     files = {"audio_file": (audio_file.name, f, "audio/mpeg")}
                     response = await client.post(
                         f"{self.WHISPER_URL}/asr",
                         files=files,
-                        data={"language": language}
+                        data={"language": "nl"}  # Dutch
                     )
                     response.raise_for_status()
+                    
                     result = response.json()
-                    text = result.get("text", "").strip()
-                    logger.debug(f"Whisper transcribed text (lang={language}): {text[:120]}")
-                    return text
-
+                    return result.get("text", "").strip()
+                    
         except httpx.HTTPError as e:
             logger.error(f"Whisper transcription failed: {e}")
             raise RuntimeError(f"Failed to transcribe audio: {e}")
