@@ -1,0 +1,22 @@
+# Anki Card Creation HTTP Request (Example)
+# Store your real Bearer token in .env.test or .env.local (git-ignored).
+# Use environment variables: {{API_BASE_URL}}, {{API_PASSWORD}}
+
+### Create Card
+POST {{API_BASE_URL}}/api/anki/cards
+Accept: application/json, text/plain, */*
+Authorization: Bearer {{API_PASSWORD}}
+Content-Type: application/json
+
+{
+  "front": "werken",
+  "back": "to work",
+  "notes": "Common verb",
+  "deck_id": "{{DECK_ID}}",
+  "tags": ["verb", "common"]
+}
+
+### Example env
+# API_BASE_URL=http://localhost:5055
+# API_PASSWORD=6596011
+# DECK_ID=anki_deck:xxxxxxxxxxxxxxxxxxxx

@@ -1,0 +1,99 @@
+## Description
+
+Moves development and test artifacts into `scripts/archived/`, adds archival documentation, and includes developer-facing improvements to the Anki card generation tooling and media pipeline. These changes aim to make local testing and maintenance easier while keeping production behavior unchanged.
+
+## Related Issue
+
+None. Create/assign an issue if you want this tracked formally.
+
+Fixes #<!-- issue number -->
+
+## Type of Change
+
+- [ ] Bug fix (non-breaking change that fixes an issue)
+- [ ] New feature (non-breaking change that adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [x] Documentation update
+- [x] Code refactoring (no functional changes)
+- [x] Test coverage improvement
+- [ ] Performance improvement
+
+## How Has This Been Tested?
+
+- [x] Tested locally with Docker
+- [x] Tested locally with development setup
+- [x] Added new unit tests (dev-only test harness/scripts)
+- [ ] Existing tests pass (`uv run pytest`)
+- [x] Manual testing performed
+
+**Test Details:**
+- Generated a short WAV and exercised Whisper `/detect-language` and `/asr` endpoints.
+- Ran `POST /api/sources/{source_id}/generate-anki-b2` on sample source `source:smnytv2llmk77i2mzrxj` and confirmed insight `source_insight:unxx5sprpdlveiad8box` with 19 cards.
+- Verified TTS audio files were produced under `notebook_data/uploads/anki_data/audio/` using the Piper HTTP proxy and Wyoming/TCP fallback.
+
+## Design Alignment
+
+**Which design principles does this PR support?** (See [DESIGN_PRINCIPLES.md](../DESIGN_PRINCIPLES.md))
+
+- [ ] Privacy First
+- [x] Simplicity Over Features
+- [x] API-First Architecture
+- [x] Multi-Provider Flexibility
+- [x] Extensibility Through Standards
+- [x] Async-First for Performance
+
+**Explanation:**
+The PR tightens the transformation output contract (JSON), adds STT autodetect with a Dutch default, and provides TTS fallbacks so dev workflows remain resilient across providers and runtimes.
+
+## Checklist
+
+### Code Quality
+- [ ] My code follows PEP 8 style guidelines (Python)
+- [ ] My code follows TypeScript best practices (Frontend)
+- [ ] I have added type hints to my code (Python)
+- [ ] I have added JSDoc comments where appropriate (TypeScript)
+- [x] I have performed a self-review of my code
+- [x] I have commented non-obvious logic where helpful (audio fallback, autodetect)
+
+### Testing
+- [x] I have added tests or test scripts that help validate the change (dev-only)
+- [ ] New and existing unit tests pass locally with my changes
+- [x] I ran manual verification with Docker/dev stack
+- [ ] I ran linting: `ruff check . --fix`
+- [ ] I ran type checking: `uv run python -m mypy .`
+
+### Documentation
+- [x] I have updated the relevant documentation (`ANKI_TODO.md`)
+- [x] I have added/updated docstrings for new/modified functions where appropriate
+- [ ] I have updated the API documentation (if API changes were made)
+
+### Database Changes
+- [ ] I have created migration scripts for any database schema changes (in `/migrations`)
+
+### Breaking Changes
+- [ ] This PR includes breaking changes
+- [x] No breaking changes (backwards compatible; additions are dev/test tooling and non-breaking improvements)
+
+## Screenshots (if applicable)
+
+<!-- Add screenshots for UI changes -->
+
+## Additional Context
+
+- Dev/test artifacts were moved to `scripts/archived/` for easier follow-up cleanup. Large binaries remain archived until you confirm deletion or external backup.
+- Image caching requires API keys and was not executed; follow-up PR recommended to persist media paths into insights.
+
+## Pre-Submission Verification
+
+Before submitting, please verify:
+
+- [x] I have read [CONTRIBUTING.md](../CONTRIBUTING.md)
+- [x] I have read [DESIGN_PRINCIPLES.md](../DESIGN_PRINCIPLES.md)
+- [ ] This PR addresses an approved issue that was assigned to me
+- [x] I have not included unrelated changes in this PR
+- [x] My PR title follows conventional commits format
+
+---
+
+**Thank you for contributing to Open Notebook!** 🎉
+

@@ -5,6 +5,7 @@ from loguru import logger
 from api.models import NoteResponse, SaveAsNoteRequest, SourceInsightResponse
 from open_notebook.domain.notebook import SourceInsight
 from open_notebook.exceptions import InvalidInputError
+from api.anki_insights_service import AnkiInsightsService
 
 router = APIRouter()
 
@@ -79,3 +80,33 @@ async def save_insight_as_note(insight_id: str, request: SaveAsNoteRequest):
     except Exception as e:
         logger.error(f"Error saving insight {insight_id} as note: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error saving insight as note: {str(e)}")
+
+
+@router.get("/insights/{insight_id}/cards-preview")
+async def preview_insight_cards(insight_id: str):
+    """Return parsed card preview for an insight to help diagnose template differences."""
+    try:
+        insight = await SourceInsight.get(insight_id)
+        if not insight:
+            raise HTTPException(status_code=404, detail="Insight not found")
+
+        content = insight.content or ""
+        cards = AnkiInsightsService.parse_cards_from_insight(content)
+        if not cards:
+            return {"insight_id": insight_id, "parsed": False, "message": "No cards parsed", "content_preview": content[:200]}
+
+        # Return a compact preview: fronts and first 120 chars of backs
+        preview = []
+        for c in cards:
+            preview.append({
+                "front": c.get("front", "")[:200],
+                "back_preview": (c.get("back", "")[:120] + ("..." if len(c.get("back", ""))>120 else "")),
+                "tags": c.get("suggested_tags") or c.get("tags") or []
+            })
+
+        return {"insight_id": insight_id, "parsed": True, "count": len(preview), "cards": preview}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error previewing insight {insight_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error previewing insight: {str(e)}")
