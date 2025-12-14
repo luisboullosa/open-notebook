@@ -54,7 +54,7 @@ class AnkiInsightsService:
                 logger.warning(f"Unexpected JSON structure: {type(cards)}")
                 return []
         except json.JSONDecodeError:
-            # Try to extract JSON from markdown code blocks
+            # Try to extract JSON from markdown code blocks (```json ... ```)
             json_match = re.search(r'```json\s*(\[.*?\])\s*```', content, re.DOTALL)
             if json_match:
                 try:
@@ -63,8 +63,8 @@ class AnkiInsightsService:
                         return cards
                 except json.JSONDecodeError as e:
                     logger.warning(f"Failed to parse JSON from code block: {e}")
-            
-            # Try to find JSON array anywhere in the content
+
+            # Try to find a JSON array anywhere in the content
             json_match = re.search(r'\[[\s\S]*?\{[\s\S]*?"front"[\s\S]*?\}[\s\S]*?\]', content)
             if json_match:
                 try:
@@ -73,8 +73,26 @@ class AnkiInsightsService:
                         return cards
                 except json.JSONDecodeError as e:
                     logger.warning(f"Failed to parse extracted JSON: {e}")
-            
-            logger.error(f"Could not parse cards from insight content")
+
+            # Try to recover from simple YAML-ish / line-oriented outputs.
+            # Support lines like "front: ...\nback: ..." separated by blank lines.
+            blocks = re.split(r"\n\s*\n", content.strip())
+            recovered: List[Dict] = []
+            for block in blocks:
+                # look for front: and back: pairs
+                m_front = re.search(r'front\s*:\s*(.+)', block, re.IGNORECASE)
+                m_back = re.search(r'back\s*:\s*(.+)', block, re.IGNORECASE)
+                if m_front and m_back:
+                    recovered.append({
+                        "front": m_front.group(1).strip(),
+                        "back": m_back.group(1).strip()
+                    })
+
+            if recovered:
+                logger.debug(f"Recovered {len(recovered)} card(s) from non-JSON insight")
+                return recovered
+
+            logger.error("Could not parse cards from insight content")
             return []
     
     @staticmethod

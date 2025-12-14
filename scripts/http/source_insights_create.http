@@ -1,0 +1,19 @@
+# Source Insights Creation HTTP Request (Example)
+# Use environment variables and keep secrets out of source control.
+
+### Create Insights for Source
+POST {{API_BASE_URL}}/api/sources/{{SOURCE_ID}}/insights
+Accept: application/json, text/plain, */*
+Authorization: Bearer {{API_PASSWORD}}
+Content-Type: application/json
+
+{
+  "insight_type": "anki_multicard",
+  "content": "Generate 5 vocabulary flashcards (front/back) for Dutch A1 level from this source",
+  "tags": ["anki", "dutch", "a1"]
+}
+
+### Example env
+# API_BASE_URL=http://localhost:5055
+# API_PASSWORD=6596011
+# SOURCE_ID=source:agl4023zwu6td14mjeff

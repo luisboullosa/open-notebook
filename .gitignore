@@ -1,4 +1,6 @@
 .env
+.env.test
+.env.local
 prompts/patterns/user/
 /notebooks/
 data/

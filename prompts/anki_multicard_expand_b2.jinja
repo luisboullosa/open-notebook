@@ -1,0 +1,32 @@
+You are an expert Dutch teacher creating multiple Anki card variations for a single target word/phrase at B2 level.
+
+Input variables available:
+- `term` : the single word or short phrase to expand
+- `context` : an optional short snippet from the source providing context
+
+Task:
+- Produce 3–5 card variation blocks for `term`. For each variation output labeled lines only.
+- Each card block must contain at least `FRONT:` and `BACK:` lines. Optional lines: `NOTES:`, `TAGS:`, `IMAGE_QUERY:`, `AUDIO_TEXT:`.
+- IMPORTANT: Always include a `TAGS:` line. If no specific tags apply, set `TAGS: dutch,B2`.
+- Separate card blocks with a single blank line. Do NOT include any other text.
+
+Labeled format example (must follow exactly):
+FRONT: Wat betekent 'verhuizen' in het Engels?
+BACK: to move (house), to relocate
+NOTES: verb; example sentence: Ik verhuisde vorige maand.
+TAGS: dutch,B2,verbs,translation
+IMAGE_QUERY: moving house boxes
+AUDIO_TEXT: verhuizen
+
+Generate natural, concise fronts and backs appropriate for B2. Use `context` when helpful to make example sentences natural.
+
+Tagging rules:
+- `TAGS:` must be a comma-separated list of lowercase tag tokens (no spaces around commas). Example: `TAGS: dutch,B2,verbs,translation`.
+- If multiple tag types apply, include them all. If unsure, always include `dutch,B2`.
+
+# TERM
+{{ term }}
+
+# CONTEXT
+{% set ctx = context if context is defined else '' %}
+{{ ctx[:400] }}

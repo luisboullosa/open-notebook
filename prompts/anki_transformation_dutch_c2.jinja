@@ -68,3 +68,8 @@ Example output:
   }
 ]
 ```
+IMPORTANT - STRICT JSON ONLY:
+- The response MUST be exactly one valid JSON array and nothing else. Do NOT include any surrounding prose, headings, markdown fences, or commentary.
+- Start the response with `[` and end with `]`. All strings must use double quotes and the JSON must parse with a standard JSON parser.
+- If no cards should be generated, return an empty array: []
+
