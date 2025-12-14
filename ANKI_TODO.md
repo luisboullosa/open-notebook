@@ -81,3 +81,23 @@
   - [ ] Verify database consistency (card tracking, audit logs)
   - [ ] Test concurrent card generation requests
   - [ ] Monitor resource usage during large batch operations
+
+
+  ## Cleanup Suggestions (next actions)
+
+  These are suggested steps to tidy the repo, remove or archive unused artifacts, and create a PR with the changes.
+
+  - [ ] **Inventory scripts**: list files in `scripts/` and top-level helper scripts, mark ones no longer used (candidates: `tmp_parser.py`, `test_piper_wyoming.py`, `piper_http_proxy.py`).
+  - [ ] **Smoke-run important scripts**: run any small test scripts to confirm they're still functional before removal.
+  - [ ] **Archive rather than delete**: move confirmed-unused scripts into `scripts/archived/` and add a short note in `ARCHIVE.md` describing why.
+  - [ ] **Inspect Docker volumes**: run `docker volume ls` and compare with `docker-compose.dev.yml` volumes (`whisper-models`, `piper-data`, `ollama_data`, `frontend_node_modules`) to identify orphaned volumes.
+  - [ ] **Prune unused Docker volumes**: after confirmation, run `docker volume rm` for orphaned volumes or `docker system prune --volumes` if appropriate (backup first).
+  - [ ] **Persist media files**: verify `notebook_data/uploads` contains generated audio/images; move or back up large media if needed.
+  - [ ] **Update `docker-compose.dev.yml`**: remove unused volumes entries from `volumes:` block if they are truly not used by any service.
+  - [ ] **Run tests & linters**: `pytest`, `ruff`, `mypy` to ensure cleanup didn't break imports or references.
+  - [ ] **Commit & open PR**: create branch `anki/cleanup`, commit changes (including `ANKI_TODO.md` and any archival moves), push and open a pull request describing the cleanup.
+
+  Notes:
+  - Prefer archiving over deletion until CI/QA validates behavior.
+  - When removing volumes, ensure backups exist for any important model caches (e.g., `whisper-models`).
+  - If you want, I can perform the inventory and create the branch+commit now — tell me to proceed.
