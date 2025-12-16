@@ -50,6 +50,10 @@ RUN mkdir -p /app/data /var/log/supervisor
 # Copy supervisord configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
+# Copy frontend start wrapper and make executable
+COPY start-frontend.sh /app/start-frontend.sh
+RUN chmod +x /app/start-frontend.sh
+
 # Expose ports
 EXPOSE 8502 5055
 
