@@ -145,3 +145,10 @@ specs/
 .playwright-mcp/
 # Local large archive left in workspace — do not commit
 surreal_single_data_YYYYMMDD.zip
+
+# Local secrets and Piper runtime artifacts
+.secrets/
+# Raw audio outputs created during local TTS runs
+*.raw
+# Local Piper helper script (dev/runtime helper, not part of repo)
+scripts/piper_http_proxy.py
