@@ -4,7 +4,7 @@ Anki service layer for card management, CRUD operations, and lifecycle managemen
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
@@ -115,7 +115,7 @@ class AnkiService:
                 raise InvalidInputError(f"Card {card_id} not found")
             
             # Track changes for history
-            changes = {}
+            changes: Dict[str, Dict[str, Any]] = {}
             if front is not None and front != card.front:
                 changes["front"] = {"old": card.front, "new": front}
                 card.front = front
@@ -415,10 +415,12 @@ class AnkiService:
         Returns:
             Dictionary with 'cards' list and 'model_used' string
         """
+        import json
+
+        from ai_prompter import Prompter
+
         from open_notebook.domain.notebook import Source
         from open_notebook.graphs.utils import provision_langchain_model
-        from ai_prompter import Prompter
-        import json
         
         try:
             from open_notebook.database.repository import repo_query

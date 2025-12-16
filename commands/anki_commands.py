@@ -8,17 +8,17 @@ This module provides commands for:
 """
 
 import time
-from typing import Optional, List
+from typing import List, Optional
+
 from loguru import logger
 from pydantic import BaseModel
 from surreal_commands import CommandInput, CommandOutput, command
 
-from open_notebook.domain.anki import AnkiCard, AnkiDeck
 from api.anki_service import AnkiService
+from api.audio_service import AudioService
 from api.cefr_service import CEFRService
 from api.image_service import ImageService
-from api.audio_service import AudioService
-
+from open_notebook.domain.anki import AnkiCard, AnkiDeck
 
 # ============================================================================
 # Card Generation Commands
@@ -98,8 +98,7 @@ async def generate_anki_cards(
         if input_data.include_images:
             try:
                 image_meta = await image_service.search_image(
-                    query=sample_card.front,
-                    context=sample_card.back
+                    query=sample_card.front
                 )
                 sample_card.image_metadata = image_meta
             except Exception as e:
@@ -118,7 +117,13 @@ async def generate_anki_cards(
                 logger.warning(f"Failed to generate audio: {e}")
         
         # Create card in database
-        created_card = await anki_service.create_card(sample_card)
+        created_card = await anki_service.create_card(
+            front=sample_card.front,
+            back=sample_card.back,
+            notes=sample_card.notes,
+            deck_id=sample_card.deck_id,
+            tags=sample_card.tags,
+        )
         card_ids.append(created_card.id)
         cards_created += 1
         
@@ -128,10 +133,14 @@ async def generate_anki_cards(
                 # Regenerate with proper card ID
                 audio_meta = await audio_service.generate_reference_audio(
                     text=created_card.front,
-                    card_id=created_card.id,
+                    card_id=str(created_card.id),
                     language=input_data.target_language
                 )
-                await anki_service.set_card_audio(created_card.id, audio_meta)
+                await anki_service.set_card_audio(
+                    str(created_card.id),
+                    audio_meta.reference_mp3 or "",
+                    ipa_transcription=(audio_meta.ipa_transcriptions[0] if audio_meta.ipa_transcriptions else None),
+                )
             except Exception as e:
                 logger.warning(f"Failed to update audio with card ID: {e}")
         
@@ -268,13 +277,13 @@ async def reclassify_cefr_levels(
         if input_data.card_ids:
             # Specific card IDs
             for card_id in input_data.card_ids:
-                card = await anki_service.get_card_by_id(card_id)
+                card = await anki_service.get_card(card_id)
                 if card:
                     cards.append(card)
                     
         elif input_data.deck_id:
             # All cards in a deck
-            deck = await anki_service.get_deck_by_id(input_data.deck_id)
+            deck = await anki_service.get_deck(input_data.deck_id)
             if deck:
                 cards = await deck.get_cards()
                 
@@ -297,10 +306,10 @@ async def reclassify_cefr_levels(
                 
                 # Update card
                 await anki_service.set_card_cefr(
-                    card_id=card.id,
+                    card_id=str(card.id),
                     cefr_level=level,
-                    cefr_confidence=confidence,
-                    cefr_votes=votes
+                    confidence=confidence,
+                    votes=votes
                 )
                 
                 cards_reclassified += 1
