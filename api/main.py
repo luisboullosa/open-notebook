@@ -10,6 +10,7 @@ from loguru import logger
 
 from api.auth import PasswordAuthMiddleware
 from api.routers import (
+    anki,
     auth,
     chat,
     config,
@@ -17,6 +18,7 @@ from api.routers import (
     embedding,
     embedding_rebuild,
     episode_profiles,
+    health,
     insights,
     models,
     notebooks,
@@ -117,6 +119,10 @@ app.include_router(speaker_profiles.router, prefix="/api", tags=["speaker-profil
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(source_chat.router, prefix="/api", tags=["source-chat"])
 
+# Restore Anki and health routers (kept from backup)
+app.include_router(anki.router, prefix="/api", tags=["anki"])
+app.include_router(health.router, prefix="/api", tags=["health"])
+
 
 @app.get("/")
 async def root():
@@ -124,5 +130,5 @@ async def root():
 
 
 @app.get("/health")
-async def health():
+async def health_check():
     return {"status": "healthy"}
