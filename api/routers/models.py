@@ -12,7 +12,7 @@ from api.models import (
     ModelResponse,
     ProviderAvailabilityResponse,
 )
-from open_notebook.domain.models import DefaultModels, Model
+from open_notebook.domain.models import DefaultModels, Model, model_manager
 from open_notebook.exceptions import InvalidInputError
 
 router = APIRouter()
@@ -432,7 +432,7 @@ async def validate_configured_models() -> Dict[str, Any]:
     try:
         # Get default models - handle case where they don't exist yet
         try:
-            defaults = await DefaultModels.get_defaults()
+            defaults = await model_manager.get_defaults()
         except Exception as e:
             logger.warning(f"Could not get default models (may not be initialized yet): {e}")
             # Return empty validation if defaults not set up yet

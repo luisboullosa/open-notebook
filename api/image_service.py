@@ -10,7 +10,7 @@ Supports:
 """
 import hashlib
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -129,7 +129,7 @@ class ImageService:
                     license="Unsplash License",
                     attribution_text=attribution,
                     cached_path=cached_path,
-                    cache_expiry=datetime.utcnow() + timedelta(days=self.cache_expiry_days),
+                    cache_expiry=datetime.now(timezone.utc) + timedelta(days=self.cache_expiry_days),
                 )
                 
         except Exception as e:
@@ -178,7 +178,7 @@ class ImageService:
                     license="Pexels License",
                     attribution_text=attribution,
                     cached_path=cached_path,
-                    cache_expiry=datetime.utcnow() + timedelta(days=self.cache_expiry_days),
+                    cache_expiry=datetime.now(timezone.utc) + timedelta(days=self.cache_expiry_days),
                 )
                 
         except Exception as e:
@@ -226,7 +226,7 @@ class ImageService:
                     license="Pixabay License",
                     attribution_text=attribution,
                     cached_path=cached_path,
-                    cache_expiry=datetime.utcnow() + timedelta(days=self.cache_expiry_days),
+                    cache_expiry=datetime.now(timezone.utc) + timedelta(days=self.cache_expiry_days),
                 )
                 
         except Exception as e:
@@ -263,7 +263,7 @@ class ImageService:
                     source=provider,
                     attribution=attribution,
                     file_size=file_size,
-                    expires_at=datetime.utcnow() + timedelta(days=self.cache_expiry_days),
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=self.cache_expiry_days),
                 )
                 await cache_entry.save()
                 
@@ -332,7 +332,7 @@ class ImageService:
 
     def _is_expired(self, cache_entry: ImageCache) -> bool:
         """Check if cache entry is expired."""
-        return datetime.utcnow() > cache_entry.expires_at
+        return datetime.now(timezone.utc) > cache_entry.expires_at
 
     def _sanitize_filename(self, filename: str) -> str:
         """Sanitize filename for safe filesystem storage."""
@@ -340,7 +340,7 @@ class ImageService:
         filename = os.path.basename(filename)
         
         # Generate timestamp prefix for uniqueness
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         
         return f"{timestamp}_{filename}"
 

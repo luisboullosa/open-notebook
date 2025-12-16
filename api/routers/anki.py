@@ -11,7 +11,8 @@ Endpoints:
 """
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -25,18 +26,18 @@ from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from api.anki_insights_service import anki_insights_service
 from api.anki_service import AnkiService
+from api.audio_service import AudioService
 from api.cefr_service import CEFRService
 from api.image_service import ImageService
-from api.audio_service import AudioService
-from api.anki_insights_service import anki_insights_service
 from open_notebook.domain.anki import (
     AnkiCard,
     AnkiDeck,
     AnkiExportSession,
+    AudioMetadata,
     CEFRVote,
     ImageMetadata,
-    AudioMetadata,
 )
 from open_notebook.exceptions import InvalidInputError
 
@@ -132,7 +133,7 @@ async def get_card(card_id: str):
     """Get a card by ID."""
     try:
         service = AnkiService()
-        card = await service.get_card_by_id(card_id)
+        card = await service.get_card(card_id)
         
         if not card:
             raise HTTPException(status_code=404, detail="Card not found")
@@ -153,23 +154,23 @@ async def update_card(card_id: str, request: CardUpdateRequest):
         service = AnkiService()
         
         # Get existing card
-        card = await service.get_card_by_id(card_id)
+        card = await service.get_card(card_id)
         if not card:
             raise HTTPException(status_code=404, detail="Card not found")
         
-        # Update fields
-        if request.front is not None:
-            card.front = request.front
-        if request.back is not None:
-            card.back = request.back
-        if request.notes is not None:
-            card.notes = request.notes
-        if request.tags is not None:
-            card.tags = request.tags
-        
-        updated_card = await service.update_card(card)
+        # Update via service API (service handles persistence)
+        existing = await service.get_card(card_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Card not found")
+
+        updated_card = await service.update_card(
+            card_id,
+            front=request.front,
+            back=request.back,
+            notes=request.notes,
+            tags=request.tags,
+        )
         logger.info(f"Updated card: {card_id}")
-        
         return updated_card
         
     except HTTPException:
@@ -337,19 +338,19 @@ async def set_card_cefr(card_id: str, request: CEFRClassifyRequest):
         cefr_service = CEFRService()
         
         # Check card exists
-        card = await anki_service.get_card_by_id(card_id)
+        card = await anki_service.get_card(card_id)
         if not card:
             raise HTTPException(status_code=404, detail="Card not found")
         
         # Classify
         level, confidence, votes = await cefr_service.classify_text(request.text)
         
-        # Update card
+        # Update card (service expects `confidence` and `votes`)
         await anki_service.set_card_cefr(
             card_id=card_id,
             cefr_level=level,
-            cefr_confidence=confidence,
-            cefr_votes=votes
+            confidence=confidence,
+            votes=votes,
         )
         
         logger.info(f"Set CEFR level for card {card_id}: {level}")
@@ -380,8 +381,7 @@ async def search_image(request: ImageSearchRequest):
         service = ImageService()
         
         image_meta = await service.search_image(
-            query=request.query,
-            context=request.context
+            query=request.query
         )
         
         return image_meta
@@ -402,16 +402,23 @@ async def upload_card_image(
         image_service = ImageService()
         
         # Check card exists
-        card = await anki_service.get_card_by_id(card_id)
+        card = await anki_service.get_card(card_id)
         if not card:
             raise HTTPException(status_code=404, detail="Card not found")
         
-        # Save uploaded image
-        image_meta = await image_service.save_uploaded_image(
-            file=file,
-            card_id=card_id
+        # Read uploaded file and save via ImageService
+        content = await file.read()
+        saved_path = image_service.save_uploaded_image(content, file.filename)
+        if not saved_path:
+            raise HTTPException(status_code=500, detail="Failed to save uploaded image")
+
+        image_meta = ImageMetadata(
+            cached_path=saved_path,
+            source="upload",
+            url=None,
+            attribution_text=None,
         )
-        
+
         # Update card
         await anki_service.set_card_image(card_id, image_meta)
         
@@ -443,7 +450,7 @@ async def generate_card_audio(
         audio_service = AudioService()
         
         # Check card exists
-        card = await anki_service.get_card_by_id(card_id)
+        card = await anki_service.get_card(card_id)
         if not card:
             raise HTTPException(status_code=404, detail="Card not found")
         
@@ -454,8 +461,12 @@ async def generate_card_audio(
             language=language
         )
         
-        # Update card
-        await anki_service.set_card_audio(card_id, audio_meta)
+        # Update card (AnkiService expects path + optional IPA)
+        await anki_service.set_card_audio(
+            card_id,
+            audio_meta.reference_mp3 or "",
+            ipa_transcription=(audio_meta.ipa_transcriptions[0] if audio_meta.ipa_transcriptions else None),
+        )
         
         logger.info(f"Generated audio for card {card_id}")
         
@@ -480,7 +491,7 @@ async def transcribe_user_recording(
         audio_service = AudioService()
         
         # Check card exists
-        card = await anki_service.get_card_by_id(card_id)
+        card = await anki_service.get_card(card_id)
         if not card:
             raise HTTPException(status_code=404, detail="Card not found")
         
@@ -545,7 +556,14 @@ async def create_export_session(request: ExportSessionCreateRequest):
             status="draft"
         )
         
-        created_session = await service.create_export_session(session)
+        created_session = await service.create_export_session(
+            base_name=session.name,
+            description=session.description,
+            tags=session.tags,
+            export_format=session.export_format,
+            include_audio=session.include_audio,
+            include_images=session.include_images,
+        )
         
         # TODO: Link cards to session and generate export file
         
@@ -563,7 +581,7 @@ async def get_export_session(session_id: str):
     """Get an export session by ID."""
     try:
         service = AnkiService()
-        session = await service.get_export_session_by_id(session_id)
+        session = await service.get_export_session(session_id)
         
         if not session:
             raise HTTPException(status_code=404, detail="Export session not found")
@@ -587,7 +605,7 @@ class GenerateCardRequest(BaseModel):
     source_ids: List[str] = Field(..., description="List of source IDs to use as context")
     user_prompt: str = Field(..., description="User's prompt/instructions for card generation")
     model_id: Optional[str] = Field(None, description="Optional model override")
-    num_cards: int = Field(1, min=1, max=10, description="Number of cards to generate")
+    num_cards: int = Field(1, ge=1, le=10, description="Number of cards to generate")
 
 
 class GeneratedCardPreview(BaseModel):
@@ -729,8 +747,11 @@ async def get_notebook_anki_insights(notebook_id: str):
         insights_with_cards = await anki_insights_service.get_anki_insights_for_notebook(notebook_id)
         
         # Group by source
-        sources_dict = {}
+        sources_dict: Dict[str, Any] = {}
         for insight, source_id, cards in insights_with_cards:
+            # Skip entries without a valid source_id
+            if not source_id:
+                continue
             if source_id not in sources_dict:
                 sources_dict[source_id] = {
                     "source_id": source_id,
@@ -798,8 +819,8 @@ async def create_cards_from_insight(
         
         # Create the cards with media generation
         anki_service = AnkiService()
-        from api.image_service import ImageService
         from api.audio_service import AudioService
+        from api.image_service import ImageService
         
         image_service = ImageService()
         audio_service = AudioService()
@@ -850,7 +871,11 @@ async def create_cards_from_insight(
                         voice=voice
                     )
                     if audio_meta:
-                        await anki_service.set_card_audio(str(card.id), audio_meta)
+                        await anki_service.set_card_audio(
+                            str(card.id),
+                            audio_meta.reference_mp3 or "",
+                            ipa_transcription=(audio_meta.ipa_transcriptions[0] if audio_meta.ipa_transcriptions else None),
+                        )
                         card.audio_metadata = audio_meta
                 except Exception as e:
                     logger.warning(f"Failed to generate audio for card {card.id}: {e}")

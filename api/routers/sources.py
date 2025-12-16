@@ -1,6 +1,7 @@
+import json
 import os
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import (
     APIRouter,
@@ -32,8 +33,6 @@ from open_notebook.database.repository import ensure_record_id, repo_query
 from open_notebook.domain.notebook import Notebook, Source
 from open_notebook.domain.transformation import Transformation
 from open_notebook.exceptions import InvalidInputError
-import json
-from typing import Any, Dict
 
 router = APIRouter()
 
@@ -1126,9 +1125,10 @@ async def generate_anki_b2(source_id: str, model_id: str | None = None):
             raise HTTPException(status_code=400, detail="No candidate terms extracted")
 
         # Local imports to avoid circular import at module load
-        from api.image_service import image_service
-        from api.audio_service import AudioService
         import hashlib
+
+        from api.audio_service import AudioService
+        from api.image_service import image_service
 
         audio_service = AudioService()
 
@@ -1224,9 +1224,11 @@ async def generate_anki_b2(source_id: str, model_id: str | None = None):
                 # Generate reference audio (Piper) if audio_text present
                 try:
                     # Use a deterministic per-card id based on content
-                    card_id_hash = hashlib.md5((card.get('front','') + '||' + card.get('back','')).encode('utf-8')).hexdigest()
+                    front_text = str(card.get('front', ''))
+                    back_text = str(card.get('back', ''))
+                    card_id_hash = hashlib.md5((front_text + '||' + back_text).encode('utf-8')).hexdigest()
                     audio_meta = await audio_service.generate_reference_audio(
-                        text=card.get('audio_text', card.get('front', '')),
+                        text=str(card.get('audio_text', card.get('front', ''))),
                         card_id=card_id_hash,
                         language='nl'
                     )
@@ -1234,7 +1236,7 @@ async def generate_anki_b2(source_id: str, model_id: str | None = None):
                         card['audio_path'] = str(audio_meta.reference_mp3)
                         card['audio_ipa'] = audio_meta.ipa_transcriptions
                 except Exception as e:
-                    logger.warning(f"Audio generation failed for card front='{card.get('front')[:50]}': {e}")
+                    logger.warning(f"Audio generation failed for card front='{front_text[:50]}': {e}")
 
                 cards.append(card)
 
@@ -1246,7 +1248,7 @@ async def generate_anki_b2(source_id: str, model_id: str | None = None):
         await source.add_insight("Anki Cards - Dutch B2", cards_json)
 
         # Fetch the newly created insight reliably (order by created desc)
-        from open_notebook.database.repository import repo_query, ensure_record_id
+        from open_notebook.database.repository import ensure_record_id, repo_query
 
         res = await repo_query(
             "SELECT * FROM source_insight WHERE source=$id ORDER BY created DESC LIMIT 1;",

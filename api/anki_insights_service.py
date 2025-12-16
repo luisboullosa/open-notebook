@@ -3,11 +3,12 @@ Service for converting transformation insights into Anki cards.
 """
 import json
 import re
-from typing import List, Dict, Optional
+from typing import Any, Dict, List, Optional
+
 from loguru import logger
 
-from open_notebook.domain.notebook import SourceInsight
 from open_notebook.database.repository import repo_query
+from open_notebook.domain.notebook import SourceInsight
 
 
 class AnkiInsightsService:
@@ -102,7 +103,7 @@ class AnkiInsightsService:
         return anki_insights
     
     @staticmethod
-    async def get_anki_insights_for_notebook(notebook_id: str) -> List[tuple[SourceInsight, str, List[Dict]]]:
+    async def get_anki_insights_for_notebook(notebook_id: str) -> List[tuple[SourceInsight, Optional[str], List[Dict]]]:
         """
         Get all Anki card insights for all sources in a notebook.
         
@@ -114,7 +115,7 @@ class AnkiInsightsService:
                 source AS source_id
             FROM source_insight
             WHERE source IN (
-                SELECT value in FROM reference WHERE out = $notebook_id
+                SELECT value FROM reference WHERE out = $notebook_id
             )
             ORDER BY created DESC
         """

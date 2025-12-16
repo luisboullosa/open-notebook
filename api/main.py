@@ -1,5 +1,6 @@
 # Load environment variables
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from contextlib import asynccontextmanager
@@ -128,5 +129,5 @@ async def root():
 
 
 @app.get("/health")
-async def health():
+async def health_check():
     return {"status": "healthy"}

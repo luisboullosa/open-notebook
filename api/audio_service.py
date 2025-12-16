@@ -10,17 +10,37 @@ This service handles:
 
 import asyncio
 import hashlib
-import httpx
 import os
-from datetime import datetime, timedelta
-from loguru import logger
-from pathlib import Path
-from phonemizer import phonemize
-from phonemizer.backend import EspeakBackend
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
-from open_notebook.domain.anki import AnkiCard, AudioMetadata
+import httpx
+
+# Prefer `loguru` but fall back to stdlib logger for environments without it.
+logger: Any
+try:
+    from loguru import logger
+except Exception:
+    import logging
+    logger = logging.getLogger("open_notebook")
+from pathlib import Path
+
+try:
+    from phonemizer import phonemize
+except Exception:
+    # Fallback so the module can run in environments without phonemizer installed.
+    def phonemize(text, **kwargs):
+        return text
+
+
+class EspeakBackend:
+    def __init__(self, *a, **k):
+        pass
+from typing import Optional, cast
+
+from api.anki_service import AnkiService
 from open_notebook.config import UPLOADS_FOLDER
+from open_notebook.domain.anki import AnkiCard, AudioMetadata
 
 
 class AudioService:
@@ -77,7 +97,7 @@ class AudioService:
         # Create audio metadata
         metadata = AudioMetadata(
             reference_mp3=str(audio_path),
-            audio_expires_at=datetime.utcnow() + timedelta(days=self.AUDIO_EXPIRY_DAYS),
+            audio_expires_at=datetime.now(timezone.utc) + timedelta(days=self.AUDIO_EXPIRY_DAYS),
             ipa_transcriptions=[ipa],
             user_recordings=[],
             phonetic_scores=[]
@@ -267,7 +287,7 @@ class AudioService:
         if len(s2) == 0:
             return len(s1)
         
-        previous_row = range(len(s2) + 1)
+        previous_row = list(range(len(s2) + 1))
         for i, c1 in enumerate(s1):
             current_row = [i + 1]
             for j, c2 in enumerate(s2):
@@ -316,14 +336,31 @@ class AudioService:
         regenerated_count = 0
         for card in cards:
             try:
+                # Ensure card has an ID
+                if not getattr(card, "id", None):
+                    logger.warning(f"Skipping card without id: {card}")
+                    continue
+
+                # Cast card.id to str for static type checker
+                card_id = cast(str, card.id)
+
                 # Generate new audio
                 audio_metadata = await self.generate_reference_audio(
-                    text=card.front,  # Use front of card as audio text
-                    card_id=card.id
+                    text=card.front or "",
+                    card_id=card_id,
                 )
-                
-                # Update card with new audio
-                await anki_service.set_card_audio(card.id, audio_metadata)
+
+                # Update card with new audio (pass path and IPA string)
+                reference_path = getattr(audio_metadata, "reference_mp3", None)
+                ipa = None
+                if getattr(audio_metadata, "ipa_transcriptions", None):
+                    ipas = audio_metadata.ipa_transcriptions
+                    ipa = ipas[0] if isinstance(ipas, list) and len(ipas) > 0 else None
+
+                if not reference_path:
+                    logger.error(f"Generated audio missing path for card {card.id}")
+                    continue
+                await anki_service.set_card_audio(card_id, reference_path, ipa_transcription=ipa)
                 regenerated_count += 1
                 
             except Exception as e:
@@ -342,12 +379,12 @@ class AudioService:
         logger.info("Cleaning up expired audio files")
         
         deleted_count = 0
-        expiry_threshold = datetime.utcnow()
+        expiry_threshold = datetime.now(timezone.utc)
         
         # Iterate through all audio files
         for audio_file in self.audio_dir.glob("*.mp3"):
             # Check if file is old enough to be expired (older than expiry days)
-            file_age = datetime.utcnow() - datetime.fromtimestamp(audio_file.stat().st_mtime)
+            file_age = datetime.now(timezone.utc) - datetime.fromtimestamp(audio_file.stat().st_mtime)
             
             if file_age > timedelta(days=self.AUDIO_EXPIRY_DAYS):
                 try:

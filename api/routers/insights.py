@@ -2,10 +2,10 @@
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 
+from api.anki_insights_service import AnkiInsightsService
 from api.models import NoteResponse, SaveAsNoteRequest, SourceInsightResponse
 from open_notebook.domain.notebook import SourceInsight
 from open_notebook.exceptions import InvalidInputError
-from api.anki_insights_service import AnkiInsightsService
 
 router = APIRouter()
 

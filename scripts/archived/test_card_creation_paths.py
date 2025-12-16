@@ -12,11 +12,12 @@ See .env.test for configuration.
 """
 
 import asyncio
-import httpx
 import json
 import os
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
+import httpx
 
 # Load test environment variables from .env.test
 env_file = Path(__file__).parent / ".env.test"

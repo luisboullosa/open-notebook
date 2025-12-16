@@ -4,7 +4,9 @@ Script to add Anki card generation transformations to the database.
 Run this from within the open_notebook container.
 """
 import asyncio
+
 from open_notebook.database.repository import repo_query
+
 
 async def add_anki_transformations():
     """Add Anki card generation transformations for Dutch CEFR levels."""

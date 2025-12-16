@@ -6,9 +6,10 @@ Tests card generation workflow: create source → vectorize → generate cards
 """
 
 import asyncio
-import httpx
 import os
 from pathlib import Path
+
+import httpx
 
 # Load test environment variables from .env.test
 env_file = Path(__file__).parent / ".env.test"

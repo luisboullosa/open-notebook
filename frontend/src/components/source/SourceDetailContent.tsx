@@ -475,7 +475,12 @@ export function SourceDetailContent({
                       h3: ({ children }) => <h3 className="text-lg font-semibold mt-4 mb-2">{children}</h3>,
                       ul: ({ children }) => <ul className="mb-4 list-disc pl-6">{children}</ul>,
                       ol: ({ children }) => <ol className="mb-4 list-decimal pl-6">{children}</ol>,
-                      li: ({ children }) => <li className="mb-1">{children}</li>,
+                      li: ({ children }) => {
+                        // TODO: Wrap list items in a surrounding <ul> or <ol> when
+                        // rendering via ReactMarkdown to satisfy HTML semantics
+                        // (this fixes the lint error about <li> needing a parent).
+                        return <li className="mb-1">{children}</li>
+                      },
                     }}
                   >
                     {source.full_text || 'No content available'}

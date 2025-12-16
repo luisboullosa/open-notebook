@@ -1,6 +1,7 @@
 import asyncio
-from api.anki_service import AnkiService
 import json
+
+from api.anki_service import AnkiService
 
 
 async def main():

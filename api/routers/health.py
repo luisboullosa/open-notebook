@@ -1,6 +1,6 @@
-import os
 import asyncio
-from datetime import datetime
+import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import httpx
@@ -90,5 +90,5 @@ async def get_services_health():
     
     return {
         "services": services,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
