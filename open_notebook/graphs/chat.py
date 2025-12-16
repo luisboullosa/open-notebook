@@ -5,11 +5,7 @@ from typing import Annotated, Optional
 from ai_prompter import Prompter
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
-
-try:
-    from langgraph.checkpoint.sqlite import SqliteSaver
-except Exception:  # pragma: no cover - optional dependency
-    SqliteSaver = None
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
@@ -73,14 +69,11 @@ def call_model_with_messages(state: ThreadState, config: RunnableConfig) -> dict
     return {"messages": ai_message}
 
 
-if SqliteSaver is not None:
-    conn = sqlite3.connect(
-        LANGGRAPH_CHECKPOINT_FILE,
-        check_same_thread=False,
-    )
-    memory = SqliteSaver(conn)
-else:
-    memory = None
+conn = sqlite3.connect(
+    LANGGRAPH_CHECKPOINT_FILE,
+    check_same_thread=False,
+)
+memory = SqliteSaver(conn)
 
 agent_state = StateGraph(ThreadState)
 agent_state.add_node("agent", call_model_with_messages)

@@ -7,16 +7,7 @@ sqlite-db/
 surreal-data/
 docker.env
 !setup_guide/docker.env
-docker.orangepi.env
-duckdns.env
 notebook_data/
-notebook_data_backup*/
-# Local data backups and runtime state (do not commit)
-*_data
-*_data_backup*
-surreal_single_data_YYYYMMDD.zip
-letsencrypt/
-HARDWARE_RECOMMENDATIONS.md
 # Python-specific
 *.py[cod]
 __pycache__/
@@ -143,15 +134,3 @@ specs/
 .claude
 
 .playwright-mcp/
-# Local large archive left in workspace — do not commit
-surreal_single_data_YYYYMMDD.zip
-
-# Ignore specific local archived script artifacts
-scripts/archived/cleanup_old_embeddings.py
-
-# Local secrets and Piper runtime artifacts
-.secrets/
-# Raw audio outputs created during local TTS runs
-*.raw
-# Local Piper helper script (dev/runtime helper, not part of repo)
-scripts/piper_http_proxy.py

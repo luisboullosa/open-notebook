@@ -115,6 +115,7 @@ async def cancel_command_job(job_id: str):
             detail=f"Failed to cancel command job: {str(e)}"
         )
 
+
 @router.get("/commands/embedding/status")
 async def get_embedding_tasks_status():
     """Get status of all embedding-related tasks"""
@@ -122,11 +123,11 @@ async def get_embedding_tasks_status():
         from datetime import datetime, timedelta, timezone
 
         from open_notebook.database.repository import repo_query
-        
+
         # Query only active/recent embedding-related commands
         # Limit to last 2 hours to keep it fast
         recent_cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
-        
+
         # Optimized query - only get running/pending tasks first
         query_active = """
             SELECT * FROM command
@@ -135,7 +136,7 @@ async def get_embedding_tasks_status():
             ORDER BY created DESC
             LIMIT 50
         """
-        
+
         # Get recently completed/failed (last 2 hours, limit 20)
         query_recent = """
             SELECT * FROM command
@@ -145,7 +146,7 @@ async def get_embedding_tasks_status():
             ORDER BY created DESC
             LIMIT 20
         """
-        
+
         # Run queries in parallel for speed
         import asyncio
         active_results, recent_results = await asyncio.gather(
@@ -153,7 +154,7 @@ async def get_embedding_tasks_status():
             repo_query(query_recent, {"cutoff": recent_cutoff.isoformat()}),
             return_exceptions=True
         )
-        
+
         # Handle query errors gracefully
         if isinstance(active_results, Exception):
             logger.error(f"Error fetching active tasks: {active_results}")
@@ -161,10 +162,10 @@ async def get_embedding_tasks_status():
         if isinstance(recent_results, Exception):
             logger.error(f"Error fetching recent tasks: {recent_results}")
             recent_results = []
-        
+
         # Combine results
         all_results = list(active_results) + list(recent_results)
-        
+
         tasks = []
         summary = {
             "total": len(all_results),
@@ -173,7 +174,7 @@ async def get_embedding_tasks_status():
             "completed_recently": 0,
             "failed_recently": 0
         }
-        
+
         for row in all_results:
             status = row.get("status", "unknown")
             task = {
@@ -185,14 +186,14 @@ async def get_embedding_tasks_status():
                 "error_message": row.get("error_message"),
                 "progress": row.get("progress"),
             }
-            
+
             # Try to extract source info from input
             input_data = row.get("input", {})
             if isinstance(input_data, dict):
                 task["source_id"] = input_data.get("source_id")
-            
+
             tasks.append(task)
-            
+
             # Update summary
             if status == "running":
                 summary["running"] += 1
@@ -202,12 +203,12 @@ async def get_embedding_tasks_status():
                 summary["completed_recently"] += 1
             elif status == "failed":
                 summary["failed_recently"] += 1
-        
+
         return {
             "tasks": tasks,
             "summary": summary
         }
-        
+
     except Exception as e:
         logger.error(f"Error fetching embedding tasks: {e}")
         # Return empty state instead of failing

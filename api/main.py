@@ -1,6 +1,5 @@
 # Load environment variables
 from dotenv import load_dotenv
-
 load_dotenv()
 
 from contextlib import asynccontextmanager
@@ -100,10 +99,8 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(anki.router, prefix="/api", tags=["anki"])
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(config.router, prefix="/api", tags=["config"])
-app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(notebooks.router, prefix="/api", tags=["notebooks"])
 app.include_router(search.router, prefix="/api", tags=["search"])
 app.include_router(models.router, prefix="/api", tags=["models"])
@@ -121,6 +118,10 @@ app.include_router(episode_profiles.router, prefix="/api", tags=["episode-profil
 app.include_router(speaker_profiles.router, prefix="/api", tags=["speaker-profiles"])
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(source_chat.router, prefix="/api", tags=["source-chat"])
+
+# Restore Anki and health routers (kept from backup)
+app.include_router(anki.router, prefix="/api", tags=["anki"])
+app.include_router(health.router, prefix="/api", tags=["health"])
 
 
 @app.get("/")

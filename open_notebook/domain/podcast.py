@@ -1,6 +1,6 @@
 from typing import Any, ClassVar, Dict, List, Optional, Union
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import Field, field_validator
 from surrealdb import RecordID
 
 from open_notebook.database.repository import ensure_record_id, repo_query
@@ -114,7 +114,8 @@ class PodcastEpisode(ObjectModel):
         default=None, description="Link to surreal-commands job"
     )
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    class Config:
+        arbitrary_types_allowed = True
 
     async def get_job_status(self) -> Optional[str]:
         """Get the status of the associated command"""

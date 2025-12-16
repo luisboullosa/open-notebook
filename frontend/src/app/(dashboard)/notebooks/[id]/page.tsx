@@ -8,7 +8,7 @@ import { SourcesColumn } from '../components/SourcesColumn'
 import { NotesColumn } from '../components/NotesColumn'
 import { ChatColumn } from '../components/ChatColumn'
 import { useNotebook } from '@/lib/hooks/use-notebooks'
-import { useSources } from '@/lib/hooks/use-sources'
+import { useNotebookSources } from '@/lib/hooks/use-sources'
 import { useNotes } from '@/lib/hooks/use-notes'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { useNotebookColumnsStore } from '@/lib/stores/notebook-columns-store'
@@ -16,7 +16,6 @@ import { useIsDesktop } from '@/lib/hooks/use-media-query'
 import { cn } from '@/lib/utils'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FileText, StickyNote, MessageSquare } from 'lucide-react'
-import { AnkiInsightsPanel } from '@/components/anki/AnkiInsightsPanel'
 
 export type ContextMode = 'off' | 'insights' | 'full'
 
@@ -28,12 +27,18 @@ export interface ContextSelections {
 export default function NotebookPage() {
   const params = useParams()
 
-  // Convert URL ID back to full SurrealDB ID
-  const urlId = decodeURIComponent(params.id as string)
-  const notebookId = urlId.includes(':') ? urlId : `notebook:${urlId}`
+  // Ensure the notebook ID is properly decoded from URL
+  const notebookId = decodeURIComponent(params.id as string)
 
   const { data: notebook, isLoading: notebookLoading } = useNotebook(notebookId)
-  const { data: sources, isLoading: sourcesLoading, refetch: refetchSources } = useSources(notebookId)
+  const {
+    sources,
+    isLoading: sourcesLoading,
+    refetch: refetchSources,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useNotebookSources(notebookId)
   const { data: notes, isLoading: notesLoading } = useNotes(notebookId)
 
   // Get collapse states for dynamic layout
@@ -155,6 +160,9 @@ export default function NotebookPage() {
                     onRefresh={refetchSources}
                     contextSelections={contextSelections.sources}
                     onContextModeChange={(sourceId, mode) => handleContextModeChange(sourceId, mode, 'source')}
+                    hasNextPage={hasNextPage}
+                    isFetchingNextPage={isFetchingNextPage}
+                    fetchNextPage={fetchNextPage}
                   />
                 )}
                 {mobileActiveTab === 'notes' && (
@@ -194,6 +202,9 @@ export default function NotebookPage() {
                 onRefresh={refetchSources}
                 contextSelections={contextSelections.sources}
                 onContextModeChange={(sourceId, mode) => handleContextModeChange(sourceId, mode, 'source')}
+                hasNextPage={hasNextPage}
+                isFetchingNextPage={isFetchingNextPage}
+                fetchNextPage={fetchNextPage}
               />
             </div>
 
@@ -212,15 +223,10 @@ export default function NotebookPage() {
             </div>
 
             {/* Chat Column - always expanded, takes remaining space */}
-            <div className="transition-all duration-150 flex-1 space-y-6">
+            <div className="transition-all duration-150 flex-1">
               <ChatColumn
                 notebookId={notebookId}
                 contextSelections={contextSelections}
-              />
-              
-              {/* Anki Insights Panel */}
-              <AnkiInsightsPanel
-                notebookId={notebookId}
               />
             </div>
           </div>

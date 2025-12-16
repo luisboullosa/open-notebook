@@ -189,10 +189,9 @@ export function useNotebookChat({ notebookId, sources, notes, contextSelections 
       }
     }
 
-    // Add user message optimistically (with pending state)
-    const tempId = `temp-${Date.now()}`
+    // Add user message optimistically
     const userMessage: NotebookChatMessage = {
-      id: tempId,
+      id: `temp-${Date.now()}`,
       type: 'human',
       content: message,
       timestamp: new Date().toISOString()
@@ -210,47 +209,16 @@ export function useNotebookChat({ notebookId, sources, notes, contextSelections 
         model_override: modelOverride ?? (currentSession?.model_override ?? undefined)
       })
 
-      // Replace temp message with real messages from API
-      // Keep all non-temp messages and add the new ones
-      setMessages(prev => {
-        const withoutTemp = prev.filter(m => !m.id.startsWith('temp-'))
-        return response.messages
-      })
+      // Update messages with API response
+      setMessages(response.messages)
 
       // Refetch current session to get updated data
       await refetchCurrentSession()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error sending message:', error)
-      
-      // Check for specific error types
-      const errorMessage = error?.response?.data?.detail || error?.message || 'Unknown error'
-      
-      if (errorMessage.includes('not found') && errorMessage.includes('model')) {
-        // Extract model name from error message
-        const modelMatch = errorMessage.match(/model ['"]?([^'"]+)['"]? not found/)
-        const modelName = modelMatch ? modelMatch[1] : 'required model'
-        
-        toast.error(`Model downloading: ${modelName}`, {
-          description: 'Your message has been saved. Please wait 1-2 minutes for the model to download, then type and send your message again.',
-          duration: 15000
-        })
-      } else if (errorMessage.includes('embeddings') || errorMessage.includes('mxbai-embed-large')) {
-        toast.error('Embedding model downloading', {
-          description: 'Your message has been saved. The embedding model is being downloaded. Please wait 1-2 minutes and try again.',
-          duration: 15000
-        })
-      } else {
-        toast.error('Failed to send message', {
-          description: errorMessage.length > 100 
-            ? 'Your message has been saved in the chat. Check console for error details.' 
-            : `${errorMessage}. Your message has been saved - you can try sending again.`,
-          duration: 10000
-        })
-      }
-      
-      // Keep the message but mark it as failed (keep user message visible)
-      // User can manually resend by editing or retyping
-      // The message stays in the UI rather than disappearing
+      toast.error('Failed to send message')
+      // Remove optimistic message on error
+      setMessages(prev => prev.filter(msg => !msg.id.startsWith('temp-')))
     } finally {
       setIsSending(false)
     }
@@ -289,27 +257,6 @@ export function useNotebookChat({ notebookId, sources, notes, contextSelections 
     return deleteSessionMutation.mutate(sessionId)
   }, [deleteSessionMutation])
 
-  // Delete message
-  const deleteMessage = useCallback(async (messageIndex: number) => {
-    if (!currentSessionId) return
-
-    try {
-      // Remove message from local state immediately (optimistic update)
-      setMessages(prev => prev.filter((_, index) => index !== messageIndex))
-
-      // Update the LangGraph state by re-invoking with filtered messages
-      // This ensures the backend state stays in sync
-      await refetchCurrentSession()
-      
-      toast.success('Message deleted')
-    } catch (error) {
-      console.error('Error deleting message:', error)
-      toast.error('Failed to delete message')
-      // Refetch to restore correct state on error
-      await refetchCurrentSession()
-    }
-  }, [currentSessionId, refetchCurrentSession])
-
   // Update token/char counts when context selections change
   useEffect(() => {
     const updateContextCounts = async () => {
@@ -339,7 +286,6 @@ export function useNotebookChat({ notebookId, sources, notes, contextSelections 
     deleteSession,
     switchSession,
     sendMessage,
-    deleteMessage,
     refetchSessions
   }
 }

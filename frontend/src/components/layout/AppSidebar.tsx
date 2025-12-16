@@ -38,7 +38,6 @@ import {
   Plus,
   Wrench,
   Command,
-  CreditCard,
 } from 'lucide-react'
 
 const navigation = [
@@ -59,7 +58,6 @@ const navigation = [
     title: 'Create',
     items: [
       { name: 'Podcasts', href: '/podcasts', icon: Mic },
-      { name: 'Flashcards', href: '/anki', icon: CreditCard },
     ],
   },
   {

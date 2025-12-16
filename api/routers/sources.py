@@ -1,7 +1,6 @@
-import json
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from fastapi import (
     APIRouter,
@@ -169,16 +168,18 @@ async def get_sources(
         # Build ORDER BY clause
         order_clause = f"ORDER BY {sort_by} {sort_order.upper()}"
 
-        # Build the query - optimized to avoid expensive subqueries under load
+        # Build the query
         if notebook_id:
             # Verify notebook exists first
             notebook = await Notebook.get(notebook_id)
             if not notebook:
                 raise HTTPException(status_code=404, detail="Notebook not found")
 
-            # Simplified query - skip expensive subqueries when DB is under load
+            # Query sources for specific notebook - include command field
             query = f"""
-                SELECT id, asset, created, title, updated, topics, command
+                SELECT id, asset, created, title, updated, topics, command,
+                (SELECT VALUE count() FROM source_insight WHERE source = $parent.id GROUP ALL)[0].count OR 0 AS insights_count,
+                ((SELECT VALUE id FROM source_embedding WHERE source = $parent.id LIMIT 1)) != NONE AS embedded
                 FROM (select value in from reference where out=$notebook_id)
                 {order_clause}
                 LIMIT $limit START $offset
@@ -191,9 +192,11 @@ async def get_sources(
                 }
             )
         else:
-            # Simplified query for all sources
+            # Query all sources - include command field
             query = f"""
-                SELECT id, asset, created, title, updated, topics, command
+                SELECT id, asset, created, title, updated, topics, command,
+                (SELECT VALUE count() FROM source_insight WHERE source = $parent.id GROUP ALL)[0].count OR 0 AS insights_count,
+                ((SELECT VALUE id FROM source_embedding WHERE source = $parent.id LIMIT 1)) != NONE AS embedded
                 FROM source
                 {order_clause}
                 LIMIT $limit START $offset
@@ -293,9 +296,9 @@ async def get_sources(
                     )
                     if row.get("asset")
                     else None,
-                    embedded=False,  # Set to False to avoid slow subquery - can be fetched on demand
+                    embedded=row.get("embedded", False),
                     embedded_chunks=0,  # Removed from query - not needed in list view
-                    insights_count=0,  # Set to 0 to avoid slow subquery - can be fetched on demand
+                    insights_count=row.get("insights_count", 0),
                     created=str(row["created"]),
                     updated=str(row["updated"]),
                     # Status fields
@@ -590,41 +593,6 @@ async def create_source_json(source_data: SourceCreate):
     form_data = (source_data, None)
     return await create_source(form_data)
 
-@router.post("/sources/{source_id}/vectorize")
-async def vectorize_source_endpoint(source_id: str):
-    """Submit a vectorization job for a source using the background command system.
-
-    Returns a command_id that can be used to track progress via the commands API.
-    """
-    try:
-        # Ensure source exists
-        source = await Source.get(source_id)
-        if not source:
-            raise HTTPException(status_code=404, detail="Source not found")
-
-        if not source.full_text:
-            raise HTTPException(status_code=400, detail="Source has no text to vectorize")
-
-        # Ensure embedding commands are importable/registered
-        try:
-            import commands.embedding_commands  # noqa: F401
-        except Exception as e:
-            logger.warning(f"Failed to import embedding commands: {e}")
-
-        # Submit the vectorize_source command via CommandService
-        command_id = await CommandService.submit_command_job(
-            "open_notebook",
-            "vectorize_source",
-            {"source_id": str(source.id)},
-        )
-
-        return {"command_id": command_id, "message": "Vectorization job submitted"}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to submit vectorize job for {source_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to submit vectorize job: {str(e)}")
 
 async def _resolve_source_file(source_id: str) -> tuple[str, str]:
     source = await Source.get(source_id)
@@ -1032,7 +1000,6 @@ async def get_source_insights(source_id: str):
 @router.post("/sources/{source_id}/insights", response_model=SourceInsightResponse)
 async def create_source_insight(source_id: str, request: CreateSourceInsightRequest):
     """Create a new insight for a source by running a transformation."""
-    logger.info(f"RECEIVED create insight request for source {source_id}, transformation {request.transformation_id}")
     try:
         # Get source
         source = await Source.get(source_id)
@@ -1071,203 +1038,3 @@ async def create_source_insight(source_id: str, request: CreateSourceInsightRequ
     except Exception as e:
         logger.error(f"Error creating insight for source {source_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error creating insight: {str(e)}")
-
-
-
-@router.post("/sources/{source_id}/generate-anki-b2")
-async def generate_anki_b2(source_id: str, model_id: str | None = None):
-    """Two-step Anki card generation for Dutch B2:
-    1) Extract candidate terms from source text
-    2) For each term, run multicard expansion and assemble JSON cards
-    Saves a single SourceInsight containing the final cards JSON and returns the insight record.
-    """
-    try:
-        source = await Source.get(source_id)
-        if not source:
-            raise HTTPException(status_code=404, detail="Source not found")
-
-        # Load prompt templates from prompts/ directory
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        extract_path = os.path.join(base_dir, 'prompts', 'anki_extract_terms_b2.jinja')
-        expand_path = os.path.join(base_dir, 'prompts', 'anki_multicard_expand_b2.jinja')
-        with open(extract_path, 'r', encoding='utf8') as f:
-            extract_prompt = f.read()
-        with open(expand_path, 'r', encoding='utf8') as f:
-            expand_prompt = f.read()
-
-        # Temporary Transformation objects
-        extract_transformation = Transformation(
-            name="temp_extract_terms_b2",
-            title="Extract Terms - Dutch B2",
-            description="Temporary extraction transformation",
-            prompt=extract_prompt,
-            apply_default=False,
-        )
-
-        expand_transformation = Transformation(
-            name="temp_multicard_expand_b2",
-            title="Multicard Expand - Dutch B2",
-            description="Temporary multicard expansion",
-            prompt=expand_prompt,
-            apply_default=False,
-        )
-
-        from open_notebook.graphs.transformation import graph as transform_graph
-
-        # Run extraction (do not pass source to avoid auto-saving intermediate insight)
-        extraction_result = await transform_graph.ainvoke(
-            dict(input_text=source.full_text, transformation=extract_transformation),
-            config=dict(configurable={"model_id": model_id}) if model_id else {},
-        )
-        extracted_text = extraction_result.get("output", "") or ""
-        candidates = [line.strip() for line in extracted_text.splitlines() if line.strip()]
-        if not candidates:
-            raise HTTPException(status_code=400, detail="No candidate terms extracted")
-
-        # Local imports to avoid circular import at module load
-        import hashlib
-
-        from api.audio_service import AudioService
-        from api.image_service import image_service
-
-        audio_service = AudioService()
-
-        cards: list[Dict[str, Any]] = []
-        # Expand each candidate into labeled card blocks
-        for term in candidates:
-            exp_res = await transform_graph.ainvoke(
-                dict(input_text=term, term=term, context=source.full_text, transformation=expand_transformation),
-                config=dict(configurable={"model_id": model_id}) if model_id else {},
-            )
-            exp_output = exp_res.get("output", "") or ""
-
-            # Parse labeled blocks separated by blank lines
-            block_texts = [b.strip() for b in exp_output.split('\n\n') if b.strip()]
-            for b in block_texts:
-                card: Dict[str, Any] = {}
-                for line in b.splitlines():
-                    if ':' not in line:
-                        continue
-                    k, v = line.split(':', 1)
-                    key = k.strip().upper()
-                    val = v.strip()
-                    if key == 'FRONT':
-                        card['front'] = val
-                    elif key == 'BACK':
-                        card['back'] = val
-                    elif key == 'NOTES':
-                        card['notes'] = val
-                    elif key == 'TAGS':
-                        # Normalize tag list (split on comma)
-                        card['suggested_tags'] = [t.strip().lower() for t in val.split(',') if t.strip()]
-                    elif key == 'IMAGE_QUERY':
-                        card['image_query'] = val
-                    elif key == 'AUDIO_TEXT':
-                        card['audio_text'] = val
-
-                # Normalization & defaults
-                def _norm_text(s: str) -> str:
-                    return (
-                        s.replace('“', '"').replace('”', '"')
-                        .replace('‘', "'").replace('’', "'")
-                        .strip()
-                    )
-
-                # Fill defaults for front/back
-                if 'front' in card:
-                    card['front'] = _norm_text(card['front'])
-                else:
-                    card['front'] = term
-
-                if 'back' in card:
-                    card['back'] = _norm_text(card['back'])
-                else:
-                    card['back'] = ""
-
-                # Normalize notes, image, audio
-                if 'notes' in card:
-                    card['notes'] = _norm_text(card['notes'])
-                if 'image_query' in card:
-                    card['image_query'] = _norm_text(card['image_query'])
-                if 'audio_text' in card:
-                    card['audio_text'] = _norm_text(card['audio_text'])
-                else:
-                    # default audio text to the term
-                    card['audio_text'] = term
-
-                # Ensure tags exist and include defaults
-                tags = card.get('suggested_tags') or []
-                # normalize tags further: replace spaces with '-' inside tokens
-                normalized_tags = []
-                for t in tags:
-                    tok = t.replace(' ', '-').lower()
-                    if tok and tok not in normalized_tags:
-                        normalized_tags.append(tok)
-                # ensure dutch and b2 present
-                if 'dutch' not in normalized_tags:
-                    normalized_tags.insert(0, 'dutch')
-                if 'b2' not in normalized_tags:
-                    normalized_tags.insert(1, 'b2')
-                card['suggested_tags'] = normalized_tags
-
-                # Attach image metadata if available
-                if card.get('image_query'):
-                    try:
-                        img_meta = await image_service.search_image(card['image_query'])
-                        if img_meta and getattr(img_meta, 'cached_path', None):
-                            card['image_cached_path'] = img_meta.cached_path
-                            card['image_source'] = img_meta.source
-                            card['image_attribution'] = getattr(img_meta, 'attribution_text', None)
-                    except Exception as e:
-                        logger.warning(f"Image search failed for '{card.get('image_query')}': {e}")
-
-                # Generate reference audio (Piper) if audio_text present
-                try:
-                    # Use a deterministic per-card id based on content
-                    front_text = str(card.get('front', ''))
-                    back_text = str(card.get('back', ''))
-                    card_id_hash = hashlib.md5((front_text + '||' + back_text).encode('utf-8')).hexdigest()
-                    audio_meta = await audio_service.generate_reference_audio(
-                        text=str(card.get('audio_text', card.get('front', ''))),
-                        card_id=card_id_hash,
-                        language='nl'
-                    )
-                    if audio_meta and getattr(audio_meta, 'reference_mp3', None):
-                        card['audio_path'] = str(audio_meta.reference_mp3)
-                        card['audio_ipa'] = audio_meta.ipa_transcriptions
-                except Exception as e:
-                    logger.warning(f"Audio generation failed for card front='{front_text[:50]}': {e}")
-
-                cards.append(card)
-
-        if not cards:
-            raise HTTPException(status_code=500, detail="No cards generated from expansions")
-
-        # Save as a single insight (JSON array)
-        cards_json = json.dumps(cards, ensure_ascii=False)
-        await source.add_insight("Anki Cards - Dutch B2", cards_json)
-
-        # Fetch the newly created insight reliably (order by created desc)
-        from open_notebook.database.repository import ensure_record_id, repo_query
-
-        res = await repo_query(
-            "SELECT * FROM source_insight WHERE source=$id ORDER BY created DESC LIMIT 1;",
-            {"id": ensure_record_id(source.id)},
-        )
-        if not res:
-            raise HTTPException(status_code=500, detail="Failed to fetch newly created insight")
-        newest = res[0]
-        return {
-            "id": newest.get("id") or "",
-            "source_id": source_id,
-            "insight_type": newest.get("insight_type"),
-            "content": newest.get("content"),
-            "created": str(newest.get("created")),
-            "updated": str(newest.get("updated")),
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error generating Anki B2 cards for source {source_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error generating Anki cards: {str(e)}")

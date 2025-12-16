@@ -7,8 +7,9 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Bot, User, Send, Loader2, FileText, Lightbulb, StickyNote, Clock, Trash2 } from 'lucide-react'
+import { Bot, User, Send, Loader2, FileText, Lightbulb, StickyNote, Clock } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   SourceChatMessage,
   SourceChatContextIndicator,
@@ -35,7 +36,6 @@ interface ChatPanelProps {
   isStreaming: boolean
   contextIndicators: SourceChatContextIndicator | null
   onSendMessage: (message: string, modelOverride?: string) => void
-  onDeleteMessage?: (messageIndex: number) => void
   modelOverride?: string
   onModelChange?: (model?: string) => void
   // Session management props
@@ -60,7 +60,6 @@ export function ChatPanel({
   isStreaming,
   contextIndicators,
   onSendMessage,
-  onDeleteMessage,
   modelOverride,
   onModelChange,
   sessions = [],
@@ -80,10 +79,6 @@ export function ChatPanel({
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { openModal } = useModalManager()
-  
-  // Message history navigation
-  const [messageHistory, setMessageHistory] = useState<string[]>([])
-  const [historyIndex, setHistoryIndex] = useState(-1)
 
   const handleReferenceClick = (type: string, id: string) => {
     const modalType = type === 'source_insight' ? 'insight' : type as 'source' | 'note' | 'insight'
@@ -106,17 +101,8 @@ export function ChatPanel({
 
   const handleSend = () => {
     if (input.trim() && !isStreaming) {
-      const message = input.trim()
-      onSendMessage(message, modelOverride)
-      
-      // Add to message history (avoid duplicates)
-      setMessageHistory(prev => {
-        const filtered = prev.filter(m => m !== message)
-        return [...filtered, message].slice(-50) // Keep last 50 messages
-      })
-      
+      onSendMessage(input.trim(), modelOverride)
       setInput('')
-      setHistoryIndex(-1)
     }
   }
 
@@ -125,31 +111,9 @@ export function ChatPanel({
     const isMac = typeof navigator !== 'undefined' && navigator.userAgent.toUpperCase().indexOf('MAC') >= 0
     const isModifierPressed = isMac ? e.metaKey : e.ctrlKey
 
-    // Handle Enter to send
     if (e.key === 'Enter' && isModifierPressed) {
       e.preventDefault()
       handleSend()
-      return
-    }
-
-    // Handle up/down arrow navigation through message history
-    if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      if (messageHistory.length === 0) return
-      
-      const newIndex = historyIndex < messageHistory.length - 1 ? historyIndex + 1 : historyIndex
-      setHistoryIndex(newIndex)
-      setInput(messageHistory[messageHistory.length - 1 - newIndex] || '')
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      if (historyIndex <= 0) {
-        setHistoryIndex(-1)
-        setInput('')
-      } else {
-        const newIndex = historyIndex - 1
-        setHistoryIndex(newIndex)
-        setInput(messageHistory[messageHistory.length - 1 - newIndex] || '')
-      }
     }
   }
 
@@ -209,72 +173,53 @@ export function ChatPanel({
                 <p className="text-xs mt-2">Ask questions to understand the content better</p>
               </div>
             ) : (
-              messages.map((message, index) => {
-                const isPending = message.id.startsWith('temp-')
-                return (
-                  <div
-                    key={message.id}
-                    className={`flex gap-3 ${
-                      message.type === 'human' ? 'justify-end' : 'justify-start'
-                    } ${isPending ? 'opacity-60' : 'opacity-100'} group`}
-                  >
-                    {message.type === 'ai' && (
-                      <div className="flex-shrink-0">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Bot className="h-4 w-4" />
-                        </div>
+              messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex gap-3 ${
+                    message.type === 'human' ? 'justify-end' : 'justify-start'
+                  }`}
+                >
+                  {message.type === 'ai' && (
+                    <div className="flex-shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Bot className="h-4 w-4" />
                       </div>
-                    )}
-                    <div className="flex flex-col gap-2 max-w-[80%]">
-                      <div className="relative">
-                        <div
-                          className={`rounded-lg px-4 py-2 ${
-                            message.type === 'human'
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted'
-                          }`}
-                        >
-                          {message.type === 'ai' ? (
-                            <AIMessageContent
-                              content={message.content}
-                              onReferenceClick={handleReferenceClick}
-                            />
-                          ) : (
-                            <p className="text-sm break-words overflow-wrap-anywhere">{message.content}</p>
-                          )}
-                        </div>
-                        {/* Delete button - shows on hover */}
-                        {onDeleteMessage && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className={`absolute ${
-                              message.type === 'human' ? '-left-10' : '-right-10'
-                            } top-1 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity`}
-                            onClick={() => onDeleteMessage(index)}
-                            title="Delete message"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                      {message.type === 'ai' && (
-                        <MessageActions
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2 max-w-[80%]">
+                    <div
+                      className={`rounded-lg px-4 py-2 ${
+                        message.type === 'human'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted'
+                      }`}
+                    >
+                      {message.type === 'ai' ? (
+                        <AIMessageContent
                           content={message.content}
-                          notebookId={notebookId}
+                          onReferenceClick={handleReferenceClick}
                         />
+                      ) : (
+                        <p className="text-sm break-words overflow-wrap-anywhere">{message.content}</p>
                       )}
                     </div>
-                    {message.type === 'human' && (
-                      <div className="flex-shrink-0">
-                        <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-                          <User className="h-4 w-4 text-primary-foreground" />
-                        </div>
-                      </div>
+                    {message.type === 'ai' && (
+                      <MessageActions
+                        content={message.content}
+                        notebookId={notebookId}
+                      />
                     )}
                   </div>
-                )
-              })
+                  {message.type === 'human' && (
+                    <div className="flex-shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+                        <User className="h-4 w-4 text-primary-foreground" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
             )}
             {isStreaming && (
               <div className="flex gap-3 justify-start">
@@ -391,6 +336,7 @@ function AIMessageContent({
   return (
     <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none break-words prose-headings:font-semibold prose-a:text-blue-600 prose-a:break-all prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-p:mb-4 prose-p:leading-7 prose-li:mb-2">
       <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
         components={{
           a: LinkComponent,
           p: ({ children }) => <p className="mb-4">{children}</p>,
@@ -400,13 +346,19 @@ function AIMessageContent({
           h4: ({ children }) => <h4 className="mb-2 mt-4">{children}</h4>,
           h5: ({ children }) => <h5 className="mb-2 mt-3">{children}</h5>,
           h6: ({ children }) => <h6 className="mb-2 mt-3">{children}</h6>,
-          li: ({ children }) => {
-            // TODO: Wrap list items in a surrounding <ul> or <ol> when rendering
-            // via ReactMarkdown to satisfy HTML semantics (accessibility lint).
-            return <li className="mb-1">{children}</li>
-          },
+          li: ({ children }) => <li className="mb-1">{children}</li>,
           ul: ({ children }) => <ul className="mb-4 space-y-1">{children}</ul>,
           ol: ({ children }) => <ol className="mb-4 space-y-1">{children}</ol>,
+          table: ({ children }) => (
+            <div className="my-4 overflow-x-auto">
+              <table className="min-w-full border-collapse border border-border">{children}</table>
+            </div>
+          ),
+          thead: ({ children }) => <thead className="bg-muted">{children}</thead>,
+          tbody: ({ children }) => <tbody>{children}</tbody>,
+          tr: ({ children }) => <tr className="border-b border-border">{children}</tr>,
+          th: ({ children }) => <th className="border border-border px-3 py-2 text-left font-semibold">{children}</th>,
+          td: ({ children }) => <td className="border border-border px-3 py-2">{children}</td>,
         }}
       >
         {markdownWithCompactRefs}

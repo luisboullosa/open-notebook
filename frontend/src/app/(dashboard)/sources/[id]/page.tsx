@@ -8,7 +8,6 @@ import { useSourceChat } from '@/lib/hooks/useSourceChat'
 import { ChatPanel } from '@/components/source/ChatPanel'
 import { useNavigation } from '@/lib/hooks/use-navigation'
 import { SourceDetailContent } from '@/components/source/SourceDetailContent'
-import { SourceAnkiInsightsPanel } from '@/components/anki/SourceAnkiInsightsPanel'
 
 export default function SourceDetailPage() {
   const router = useRouter()
@@ -40,19 +39,14 @@ export default function SourceDetailPage() {
         </Button>
       </div>
 
-      {/* Main content: Source detail + Chat + Insights */}
+      {/* Main content: Source detail + Chat */}
       <div className="flex-1 grid gap-6 lg:grid-cols-[2fr_1fr] overflow-hidden px-6">
         {/* Left column - Source detail */}
-        <div className="overflow-y-auto px-4 pb-6 space-y-6">
+        <div className="overflow-y-auto px-4 pb-6">
           <SourceDetailContent
             sourceId={sourceId}
             showChatButton={false}
             onClose={handleBack}
-          />
-          
-          {/* Anki Insights for this source */}
-          <SourceAnkiInsightsPanel
-            sourceId={sourceId}
           />
         </div>
 
