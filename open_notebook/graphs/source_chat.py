@@ -5,7 +5,11 @@ from typing import Annotated, Dict, List, Optional
 from ai_prompter import Prompter
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.sqlite import SqliteSaver
+try:
+    from langgraph.checkpoint.sqlite import SqliteSaver  # type: ignore
+except Exception:
+    SqliteSaver = None
+
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
@@ -217,16 +221,19 @@ def _format_source_context(context_data: Dict) -> str:
     return "\n".join(context_parts)
 
 
-# Create SQLite checkpointer
-conn = sqlite3.connect(
-    LANGGRAPH_CHECKPOINT_FILE,
-    check_same_thread=False,
-)
-memory = SqliteSaver(conn)
+# Create optional SQLite checkpointer if available
+memory = None
+if SqliteSaver is not None:
+    conn = sqlite3.connect(LANGGRAPH_CHECKPOINT_FILE, check_same_thread=False)
+    memory = SqliteSaver(conn)
 
 # Create the StateGraph
 source_chat_state = StateGraph(SourceChatState)
 source_chat_state.add_node("source_chat_agent", call_model_with_source_context)
 source_chat_state.add_edge(START, "source_chat_agent")
 source_chat_state.add_edge("source_chat_agent", END)
-source_chat_graph = source_chat_state.compile(checkpointer=memory)
+# Compile with checkpointer if available
+if memory is not None:
+    source_chat_graph = source_chat_state.compile(checkpointer=memory)
+else:
+    source_chat_graph = source_chat_state.compile()
