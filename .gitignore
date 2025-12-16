@@ -146,6 +146,9 @@ specs/
 # Local large archive left in workspace — do not commit
 surreal_single_data_YYYYMMDD.zip
 
+# Ignore specific local archived script artifacts
+scripts/archived/cleanup_old_embeddings.py
+
 # Local secrets and Piper runtime artifacts
 .secrets/
 # Raw audio outputs created during local TTS runs
