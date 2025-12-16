@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import subprocess
 import json
+import subprocess
 
 # Get all unembedded sources
 result = subprocess.run(

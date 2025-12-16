@@ -1,6 +1,6 @@
 from typing import Any, ClassVar, Dict, List, Optional, Union
 
-from pydantic import Field, field_validator, ConfigDict
+from pydantic import ConfigDict, Field, field_validator
 from surrealdb import RecordID
 
 from open_notebook.database.repository import ensure_record_id, repo_query

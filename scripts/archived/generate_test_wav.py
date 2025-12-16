@@ -1,4 +1,7 @@
-import wave, math, array
+import array
+import math
+import wave
+
 fr = 16000
 dur = 1.0
 freq = 440.0

@@ -11,7 +11,7 @@ Endpoints:
 """
 
 from pathlib import Path
-from typing import Any, List, Optional, Dict
+from typing import Any, Dict, List, Optional
 
 from fastapi import (
     APIRouter,

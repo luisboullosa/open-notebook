@@ -1,6 +1,8 @@
 import asyncio
 from pathlib import Path
+
 from api.audio_service import AudioService
+
 
 async def main():
     svc = AudioService()

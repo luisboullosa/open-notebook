@@ -400,7 +400,11 @@ function AIMessageContent({
           h4: ({ children }) => <h4 className="mb-2 mt-4">{children}</h4>,
           h5: ({ children }) => <h5 className="mb-2 mt-3">{children}</h5>,
           h6: ({ children }) => <h6 className="mb-2 mt-3">{children}</h6>,
-          li: ({ children }) => <li className="mb-1">{children}</li>,
+          li: ({ children }) => {
+            // TODO: Wrap list items in a surrounding <ul> or <ol> when rendering
+            // via ReactMarkdown to satisfy HTML semantics (accessibility lint).
+            return <li className="mb-1">{children}</li>
+          },
           ul: ({ children }) => <ul className="mb-4 space-y-1">{children}</ul>,
           ol: ({ children }) => <ol className="mb-4 space-y-1">{children}</ol>,
         }}

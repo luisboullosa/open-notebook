@@ -11,7 +11,7 @@ Format: CSV with columns: word, frequency, rank
 import asyncio
 import csv
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from loguru import logger
 

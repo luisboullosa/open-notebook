@@ -3,7 +3,7 @@ Service for converting transformation insights into Anki cards.
 """
 import json
 import re
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 

@@ -5,6 +5,7 @@ from typing import Annotated, Dict, List, Optional
 from ai_prompter import Prompter
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
+
 try:
     from langgraph.checkpoint.sqlite import SqliteSaver
 except Exception:  # pragma: no cover - optional dependency

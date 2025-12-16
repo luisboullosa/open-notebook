@@ -102,7 +102,7 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=Etc/UTC
-      - PIPER_VOICE=en_US-lessac-low  # Use low quality for faster ARM processing
+      - PIPER_VOICE=nl_NL-female  # Dutch female voice (placeholder) - TODO: verify voice id and test later
     volumes:
       - piper_data:/config
     ports:

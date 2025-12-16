@@ -12,9 +12,9 @@ import asyncio
 import hashlib
 import os
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import httpx
-from typing import Any
 
 # Prefer `loguru` but fall back to stdlib logger for environments without it.
 logger: Any
