@@ -11,7 +11,7 @@ This service handles:
 import asyncio
 import hashlib
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from typing import Any
@@ -97,7 +97,7 @@ class AudioService:
         # Create audio metadata
         metadata = AudioMetadata(
             reference_mp3=str(audio_path),
-            audio_expires_at=datetime.utcnow() + timedelta(days=self.AUDIO_EXPIRY_DAYS),
+            audio_expires_at=datetime.now(timezone.utc) + timedelta(days=self.AUDIO_EXPIRY_DAYS),
             ipa_transcriptions=[ipa],
             user_recordings=[],
             phonetic_scores=[]
@@ -379,12 +379,12 @@ class AudioService:
         logger.info("Cleaning up expired audio files")
         
         deleted_count = 0
-        expiry_threshold = datetime.utcnow()
+        expiry_threshold = datetime.now(timezone.utc)
         
         # Iterate through all audio files
         for audio_file in self.audio_dir.glob("*.mp3"):
             # Check if file is old enough to be expired (older than expiry days)
-            file_age = datetime.utcnow() - datetime.fromtimestamp(audio_file.stat().st_mtime)
+            file_age = datetime.now(timezone.utc) - datetime.fromtimestamp(audio_file.stat().st_mtime)
             
             if file_age > timedelta(days=self.AUDIO_EXPIRY_DAYS):
                 try:

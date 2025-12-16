@@ -119,12 +119,13 @@ async def cancel_command_job(job_id: str):
 async def get_embedding_tasks_status():
     """Get status of all embedding-related tasks"""
     try:
+        from datetime import datetime, timedelta, timezone
+
         from open_notebook.database.repository import repo_query
-        from datetime import datetime, timedelta
         
         # Query only active/recent embedding-related commands
         # Limit to last 2 hours to keep it fast
-        recent_cutoff = datetime.utcnow() - timedelta(hours=2)
+        recent_cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
         
         # Optimized query - only get running/pending tasks first
         query_active = """

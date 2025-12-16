@@ -1,11 +1,11 @@
 """
 Anki domain models for flashcard generation and management.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, ClassVar, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
 from loguru import logger
+from pydantic import BaseModel, Field, field_validator
 
 from open_notebook.database.repository import ensure_record_id, repo_query
 from open_notebook.domain.base import ObjectModel
@@ -27,7 +27,7 @@ class SourceCitation(BaseModel):
     source_id: str
     page: Optional[int] = None
     context: Optional[str] = None  # Text snippet from source
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class CEFRVote(BaseModel):
@@ -124,7 +124,7 @@ class AnkiCard(ObjectModel):
         """Check if audio needs regeneration"""
         if not self.audio_metadata or not self.audio_metadata.audio_expires_at:
             return False
-        return datetime.utcnow() > self.audio_metadata.audio_expires_at
+        return datetime.now(timezone.utc) > self.audio_metadata.audio_expires_at
 
 
 class AnkiDeck(ObjectModel):
@@ -205,7 +205,7 @@ class AnkiExportSession(ObjectModel):
     @classmethod
     def generate_timestamped_name(cls, base_name: str) -> str:
         """Generate unique name with timestamp suffix"""
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
         return f"{base_name} ({timestamp})"
     
     async def get_cards(self) -> List[AnkiCard]:
@@ -325,8 +325,8 @@ class ImageCache(ObjectModel):
     
     file_size: int  # Bytes
     access_count: int = 0
-    last_accessed: datetime = Field(default_factory=datetime.utcnow)
-    expires_at: datetime = Field(default_factory=lambda: datetime.utcnow() + timedelta(days=7))
+    last_accessed: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=7))
     
     @classmethod
     async def get_by_url(cls, url: str) -> Optional["ImageCache"]:
@@ -340,7 +340,7 @@ class ImageCache(ObjectModel):
                 # Update access tracking
                 cache_entry = ImageCache(**result[0])
                 cache_entry.access_count += 1
-                cache_entry.last_accessed = datetime.utcnow()
+                cache_entry.last_accessed = datetime.now(timezone.utc)
                 await cache_entry.save()
                 return cache_entry
             return None
@@ -353,9 +353,9 @@ class ImageCache(ObjectModel):
         """Get all expired cache entries"""
         try:
             result = await repo_query(
-                "SELECT * FROM image_cache WHERE expires_at < $now",
-                {"now": datetime.utcnow()}
-            )
+                    "SELECT * FROM image_cache WHERE expires_at < $now",
+                    {"now": datetime.now(timezone.utc)}
+                )
             return [ImageCache(**entry) for entry in result] if result else []
         except Exception as e:
             logger.error(f"Error fetching expired cache entries: {str(e)}")

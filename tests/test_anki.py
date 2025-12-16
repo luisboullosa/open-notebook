@@ -10,24 +10,24 @@ This test suite covers:
 - Dutch word frequency lookups
 """
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
-from datetime import datetime, timedelta
 from pydantic import ValidationError
 
 from open_notebook.domain.anki import (
     AnkiCard,
+    AnkiCardEdit,
     AnkiDeck,
     AnkiExportSession,
-    AnkiCardEdit,
+    AudioMetadata,
+    CEFRVote,
     DutchWordFrequency,
     ImageCache,
     ImageMetadata,
-    AudioMetadata,
     SourceCitation,
-    CEFRVote,
 )
 from open_notebook.exceptions import InvalidInputError
-
 
 # ============================================================================
 # TEST SUITE 1: AnkiCard Validation
@@ -64,7 +64,7 @@ class TestAnkiCardValidation:
         
         audio_meta = AudioMetadata(
             reference_mp3="/path/to/audio.mp3",
-            audio_expires_at=datetime.utcnow() + timedelta(days=30)
+            audio_expires_at=datetime.now(timezone.utc) + timedelta(days=30)
         )
         
         votes = [
@@ -127,7 +127,7 @@ class TestAnkiCardValidation:
 
     def test_audio_expiry_check_not_expired(self):
         """Test audio expiry check when audio is not expired."""
-        future_date = datetime.utcnow() + timedelta(days=10)
+        future_date = datetime.now(timezone.utc) + timedelta(days=10)
         audio_meta = AudioMetadata(
             reference_mp3="/path/to/audio.mp3",
             audio_expires_at=future_date
@@ -141,7 +141,7 @@ class TestAnkiCardValidation:
 
     def test_audio_expiry_check_expired(self):
         """Test audio expiry check when audio is expired."""
-        past_date = datetime.utcnow() - timedelta(days=1)
+        past_date = datetime.now(timezone.utc) - timedelta(days=1)
         audio_meta = AudioMetadata(
             reference_mp3="/path/to/audio.mp3",
             audio_expires_at=past_date
@@ -324,7 +324,7 @@ class TestImageMetadata:
             license="Unsplash License",
             attribution_text="Photo by John Doe on Unsplash",
             cached_path="/app/data/anki_data/images/cache/abc123.jpg",
-            cache_expiry=datetime.utcnow() + timedelta(days=7)
+            cache_expiry=datetime.now(timezone.utc) + timedelta(days=7)
         )
         assert meta.source == "unsplash"
         assert "John Doe" in meta.attribution_text
@@ -351,7 +351,7 @@ class TestAudioMetadata:
 
     def test_audio_metadata_with_reference(self):
         """Test audio metadata with reference audio."""
-        expires = datetime.utcnow() + timedelta(days=30)
+        expires = datetime.now(timezone.utc) + timedelta(days=30)
         audio = AudioMetadata(
             reference_mp3="/app/data/anki_data/audio/card_123.mp3",
             audio_expires_at=expires,
@@ -435,7 +435,7 @@ class TestImageCache:
         )
         
         # Check expiry is roughly 7 days from now (within 1 minute tolerance)
-        expected_expiry = datetime.utcnow() + timedelta(days=7)
+        expected_expiry = datetime.now(timezone.utc) + timedelta(days=7)
         time_diff = abs((cache.expires_at - expected_expiry).total_seconds())
         assert time_diff < 60  # Within 1 minute
 
@@ -454,7 +454,7 @@ class TestImageCache:
         
         # Simulate access update
         cache.access_count += 1
-        cache.last_accessed = datetime.utcnow()
+        cache.last_accessed = datetime.now(timezone.utc)
         assert cache.access_count == 1
 
 
@@ -520,7 +520,7 @@ class TestAnkiIntegration:
         # Create audio metadata
         audio = AudioMetadata(
             reference_mp3="/audio/werken.mp3",
-            audio_expires_at=datetime.utcnow() + timedelta(days=30),
+            audio_expires_at=datetime.now(timezone.utc) + timedelta(days=30),
             ipa_transcriptions=["ˈvɛrkən"]
         )
         
