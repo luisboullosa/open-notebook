@@ -2,13 +2,7 @@ from datetime import datetime
 from typing import Any, ClassVar, Dict, List, Optional, Type, TypeVar, Union, cast
 
 from loguru import logger
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    ValidationError,
-    field_validator,
-    model_validator,
-)
+from pydantic import BaseModel, ValidationError, field_validator, model_validator
 
 from open_notebook.database.repository import (
     ensure_record_id,
@@ -218,13 +212,12 @@ class RecordModel(BaseModel):
     )
     _instances: ClassVar[Dict[str, "RecordModel"]] = {}  # Store instances by record_id
 
-    model_config = ConfigDict(
-        validate_assignment=True,
-        arbitrary_types_allowed=True,
-        extra="allow",
-        from_attributes=True,
-        defer_build=True,
-    )
+    class Config:
+        validate_assignment = True
+        arbitrary_types_allowed = True
+        extra = "allow"
+        from_attributes = True
+        defer_build = True
 
     def __new__(cls, **kwargs):
         # If an instance already exists for this record_id, return it

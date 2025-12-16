@@ -41,9 +41,7 @@ export function NotebookCard({ notebook }: NotebookCardProps) {
   }
 
   const handleCardClick = () => {
-    // Use clean URL without table prefix
-    const urlId = notebook.id.split(':')[1] || notebook.id
-    router.push(`/notebooks/${urlId}`)
+    router.push(`/notebooks/${encodeURIComponent(notebook.id)}`)
   }
 
   return (

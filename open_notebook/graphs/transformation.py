@@ -32,15 +32,6 @@ async def run_transformation(state: dict, config: RunnableConfig) -> dict:
 
     transformation_template_text = f"{transformation_template_text}\n\n# INPUT"
 
-    # Enforce strict JSON-only output from the model regardless of template wording.
-    transformation_template_text = (
-        transformation_template_text
-        + "\n\nIMPORTANT - STRICT JSON ONLY:\n"
-        + "The model MUST output exactly one valid JSON array and nothing else."
-        + " Do NOT include any surrounding prose, headings, markdown fences, or commentary."
-        + " Start with '[' and end with ']'. If no cards should be generated, return an empty array: []."
-    )
-
     system_prompt = Prompter(template_text=transformation_template_text).render(
         data=state
     )

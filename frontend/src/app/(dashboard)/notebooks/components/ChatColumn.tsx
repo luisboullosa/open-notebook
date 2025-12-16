@@ -95,7 +95,6 @@ export function ChatColumn({ notebookId, contextSelections }: ChatColumnProps) {
       isStreaming={chat.isSending}
       contextIndicators={null}
       onSendMessage={(message, modelOverride) => chat.sendMessage(message, modelOverride)}
-      onDeleteMessage={chat.deleteMessage}
       modelOverride={chat.currentSession?.model_override ?? undefined}
       onModelChange={(model) => {
         if (chat.currentSessionId) {

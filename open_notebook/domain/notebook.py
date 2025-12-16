@@ -2,7 +2,7 @@ import asyncio
 from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple, Union
 
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from surreal_commands import submit_command
 from surrealdb import RecordID
 
@@ -151,7 +151,8 @@ class Source(ObjectModel):
         default=None, description="Link to surreal-commands processing job"
     )
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    class Config:
+        arbitrary_types_allowed = True
 
     @field_validator("command", mode="before")
     @classmethod
@@ -266,8 +267,9 @@ class Source(ObjectModel):
         """
         Submit vectorization as a background job using the vectorize_source command.
 
-        This method uses the batch vectorization command to avoid HTTP connection
-        pool exhaustion and to insert embeddings in a single transaction via the worker pool.
+        This method now leverages the job-based architecture to prevent HTTP connection
+        pool exhaustion when processing large documents. The actual chunk processing
+        happens in the background worker pool, with natural concurrency control.
 
         Returns:
             str: The command/job ID that can be used to track progress via the commands API
@@ -285,7 +287,7 @@ class Source(ObjectModel):
             # Submit the vectorize_source command which will:
             # 1. Delete existing embeddings (idempotency)
             # 2. Split text into chunks
-            # 3. Batch embed and insert all chunks in a single job
+            # 3. Submit each chunk as an embed_chunk job
             command_id = submit_command(
                 "open_notebook",      # app name
                 "vectorize_source",   # command name
