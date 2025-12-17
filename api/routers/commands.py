@@ -130,7 +130,7 @@ async def get_embedding_tasks_status():
         # Optimized query - only get running/pending tasks first
         query_active = """
             SELECT * FROM command
-            WHERE command IN ['embed_chunk', 'embed_single_item', 'vectorize_source', 'rebuild_embeddings']
+            WHERE command IN ['embed_chunk', 'embed_single_item', 'vectorize_source', 'rebuild_embeddings', 'process_source']
             AND status IN ['running', 'pending']
             ORDER BY created DESC
             LIMIT 50
@@ -139,7 +139,7 @@ async def get_embedding_tasks_status():
         # Get recently completed/failed (last 2 hours, limit 20)
         query_recent = """
             SELECT * FROM command
-            WHERE command IN ['embed_chunk', 'embed_single_item', 'vectorize_source', 'rebuild_embeddings']
+            WHERE command IN ['embed_chunk', 'embed_single_item', 'vectorize_source', 'rebuild_embeddings', 'process_source']
             AND status IN ['completed', 'failed']
             AND created > $cutoff
             ORDER BY created DESC
@@ -164,12 +164,51 @@ async def get_embedding_tasks_status():
         
         # Combine results
         all_results = list(active_results) + list(recent_results)
+
+        # If no command rows found in the command table, fall back to looking
+        # for sources with a `command` reference and query the command service
+        # for their status. This covers cases where surreal-commands does not
+        # persist entries to the `command` table but the source keeps a
+        # reference to the command id.
+        if not all_results:
+            try:
+                src_rows = await repo_query(
+                    "SELECT id, command, updated, created FROM source WHERE command != none ORDER BY updated DESC LIMIT 50",
+                    {},
+                )
+                # Use CommandService to fetch statuses for each command id
+                from api.command_service import CommandService
+
+                cmd_ids = [str(r.get("command")) for r in src_rows if r.get("command")]
+                import asyncio
+
+                statuses = await asyncio.gather(
+                    *[CommandService.get_command_status(cmd_id) for cmd_id in cmd_ids],
+                    return_exceptions=True,
+                )
+
+                all_results = []
+                for s in statuses:
+                    if isinstance(s, Exception):
+                        continue
+                    # Normalize to the same shape as a DB row used below
+                    all_results.append({
+                        "id": s.get("job_id"),
+                        "command": None,
+                        "status": s.get("status"),
+                        "created": s.get("created"),
+                        "updated": s.get("updated"),
+                        "input": s.get("result") or {},
+                    })
+            except Exception as e:
+                logger.error(f"Fallback command lookup failed: {e}")
         
         tasks = []
         summary = {
             "total": len(all_results),
             "running": 0,
             "pending": 0,
+            "queued": 0,
             "completed_recently": 0,
             "failed_recently": 0
         }
@@ -196,6 +235,8 @@ async def get_embedding_tasks_status():
             # Update summary
             if status == "running":
                 summary["running"] += 1
+            elif status == "queued":
+                summary["queued"] += 1
             elif status == "pending":
                 summary["pending"] += 1
             elif status == "completed":
@@ -217,6 +258,7 @@ async def get_embedding_tasks_status():
                 "total": 0,
                 "running": 0,
                 "pending": 0,
+                "queued": 0,
                 "completed_recently": 0,
                 "failed_recently": 0
             }

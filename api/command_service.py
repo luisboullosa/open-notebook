@@ -3,6 +3,8 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 from surreal_commands import get_command_status, submit_command
 
+from open_notebook.database.repository import repo_upsert
+
 
 class CommandService:
     """Generic service layer for command operations"""
@@ -34,6 +36,25 @@ class CommandService:
             if not cmd_id:
                 raise ValueError("Failed to get cmd_id from submit_command")
             cmd_id_str = str(cmd_id)
+
+            # Persist a lightweight command record so UI/status endpoints
+            # can query jobs even if the command table isn't populated by
+            # other parts of the system. Use UPSERT to avoid duplicates.
+            try:
+                await repo_upsert(
+                    "command",
+                    cmd_id_str,
+                    {
+                        "app": module_name,
+                        "command": command_name,
+                        "input": command_args,
+                        "status": "queued",
+                    },
+                    add_timestamp=True,
+                )
+            except Exception as e:
+                logger.error(f"Failed to persist command record for {cmd_id_str}: {e}")
+
             logger.info(
                 f"Submitted command job: {cmd_id_str} for {module_name}.{command_name}"
             )

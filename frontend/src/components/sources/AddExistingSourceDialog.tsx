@@ -59,6 +59,7 @@ export function AddExistingSourceDialog({
         offset: 0,
         sort_by: 'created',
         sort_order: 'desc',
+        include_stats: true,
       })
 
       setAllSources(sources)

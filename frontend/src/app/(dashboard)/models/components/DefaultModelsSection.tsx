@@ -9,7 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { ModelDefaults, Model } from '@/lib/types/models'
 import { useUpdateModelDefaults } from '@/lib/hooks/use-models'
-import { AlertCircle, X, RefreshCw } from 'lucide-react'
+import { AlertCircle, X } from 'lucide-react'
 import { EmbeddingModelChangeDialog } from './EmbeddingModelChangeDialog'
 import { modelsApi } from '@/lib/api/models'
 

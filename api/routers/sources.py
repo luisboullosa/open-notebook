@@ -157,6 +157,7 @@ async def get_sources(
     offset: int = Query(0, ge=0, description="Number of sources to skip"),
     sort_by: str = Query("updated", description="Field to sort by (created or updated)"),
     sort_order: str = Query("desc", description="Sort order (asc or desc)"),
+    include_stats: bool = Query(False, description="Whether to include embedded/insights stats in list response"),
 ):
     """Get sources with pagination and sorting support."""
     try:
@@ -257,6 +258,31 @@ async def get_sources(
 
         # Convert result to response model
         response_list = []
+        # If requested, fetch embedding/chunk/insight stats for listed sources in parallel
+        stats_map: Dict[str, Dict[str, int]] = {}
+        if include_stats and result:
+            try:
+                import asyncio
+
+                semaphore = asyncio.Semaphore(10)
+
+                async def fetch_stats(src_id: str):
+                    async with semaphore:
+                        try:
+                            src = await Source.get(src_id)
+                            chunks = await src.get_embedded_chunks()
+                            insights = await src.get_insights()
+                            return (src_id, chunks, len(insights))
+                        except Exception as e:
+                            logger.warning(f"Failed to fetch stats for source {src_id}: {e}")
+                            return (src_id, 0, 0)
+
+                tasks = [fetch_stats(row["id"]) for row in result]
+                stats_results = await asyncio.gather(*tasks)
+                for src_id, chunks, insights_count in stats_results:
+                    stats_map[src_id] = {"chunks": chunks, "insights": insights_count}
+            except Exception as e:
+                logger.warning(f"Failed to fetch source stats in batch: {e}")
         for row in result:
             command = row.get("command")
             command_id = str(command) if command else None
@@ -293,9 +319,9 @@ async def get_sources(
                     )
                     if row.get("asset")
                     else None,
-                    embedded=False,  # Set to False to avoid slow subquery - can be fetched on demand
-                    embedded_chunks=0,  # Removed from query - not needed in list view
-                    insights_count=0,  # Set to 0 to avoid slow subquery - can be fetched on demand
+                    embedded=(stats_map.get(row["id"], {}).get("chunks", 0) > 0) if include_stats else False,
+                    embedded_chunks=stats_map.get(row["id"], {}).get("chunks", 0) if include_stats else 0,
+                    insights_count=stats_map.get(row["id"], {}).get("insights", 0) if include_stats else 0,
                     created=str(row["created"]),
                     updated=str(row["updated"]),
                     # Status fields

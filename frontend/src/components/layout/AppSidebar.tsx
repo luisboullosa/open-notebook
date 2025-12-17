@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import apiClient from '@/lib/api/client'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
@@ -101,6 +103,26 @@ export function AppSidebar() {
     }
   }
 
+  // Fetch embedding summary for global indicator
+  const fetchEmbeddingSummary = async () => {
+    try {
+      const res = await apiClient.get('/commands/embedding/status')
+      return res.data?.summary ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const { data: embeddingSummary } = useQuery({
+    queryKey: ['embedding-tasks-summary'],
+    queryFn: fetchEmbeddingSummary,
+    refetchInterval: 5000,
+    staleTime: 3000,
+  })
+
+  const globalRunning = embeddingSummary?.running ?? 0
+  const globalQueued = embeddingSummary?.queued ?? 0
+
   return (
     <TooltipProvider delayDuration={0}>
       <div
@@ -140,6 +162,11 @@ export function AppSidebar() {
                 <span className="text-base font-medium text-sidebar-foreground">
                   Open Notebook
                 </span>
+                {(globalRunning + globalQueued) > 0 && (
+                  <span className="ml-2 inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                    {globalRunning > 0 ? `${globalRunning} running` : `${globalQueued} queued`}
+                  </span>
+                )}
               </div>
               <Button
                 variant="ghost"

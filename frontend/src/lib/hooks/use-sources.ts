@@ -12,7 +12,7 @@ import {
 export function useSources(notebookId?: string) {
   return useQuery({
     queryKey: QUERY_KEYS.sources(notebookId),
-    queryFn: () => sourcesApi.list({ notebook_id: notebookId }),
+    queryFn: () => sourcesApi.list({ notebook_id: notebookId, include_stats: true }),
     enabled: !!notebookId,
     staleTime: 5 * 1000, // 5 seconds - more responsive for real-time source updates
     refetchOnWindowFocus: true, // Refetch when user comes back to the tab

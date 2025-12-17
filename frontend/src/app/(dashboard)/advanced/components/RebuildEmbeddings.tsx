@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -37,8 +37,12 @@ export function RebuildEmbeddings() {
       setCommandId(data.command_id)
       // Start polling for status
       startPolling(data.command_id)
+      // Invalidate embedding tasks summary so Settings updates immediately
+      queryClient.invalidateQueries({ queryKey: ['embedding-tasks-summary'] })
     }
   })
+
+  const queryClient = useQueryClient()
 
   // Start polling for rebuild status
   const startPolling = (cmdId: string) => {

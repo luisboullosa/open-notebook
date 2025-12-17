@@ -3,7 +3,6 @@
 import { AppShell } from '@/components/layout/AppShell'
 import { SettingsForm } from './components/SettingsForm'
 import { ServiceStatus } from './components/ServiceStatus'
-import { EmbeddingTaskTracker } from './components/EmbeddingTaskTracker'
 import { useSettings } from '@/lib/hooks/use-settings'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
@@ -25,7 +24,7 @@ export default function SettingsPage() {
             
             <ServiceStatus />
 
-            <EmbeddingTaskTracker />
+            {/* Embedding status moved to Sources page */}
 
             <SettingsForm />
           </div>

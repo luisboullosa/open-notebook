@@ -30,7 +30,7 @@ export function GenerateCardsDialog({ open, onOpenChange, deckId }: GenerateCard
   const [userPrompt, setUserPrompt] = useState('')
   const [numCards, setNumCards] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [generatedCards, setGeneratedCards] = useState<any[]>([])
+  const [generatedCards, setGeneratedCards] = useState<Array<{ front: string; back: string; notes?: string; suggested_tags?: string[] }>>([])
   const [isAddingCards, setIsAddingCards] = useState(false)
 
   const { data: notebooks } = useNotebooks()
@@ -66,15 +66,16 @@ export function GenerateCardsDialog({ open, onOpenChange, deckId }: GenerateCard
 
       setGeneratedCards(result.cards)
       toast.success(`Generated ${result.cards.length} card${result.cards.length > 1 ? 's' : ''}`)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error generating cards:', error)
-      toast.error(error?.response?.data?.detail || 'Failed to generate cards')
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error(detail || 'Failed to generate cards')
     } finally {
       setIsGenerating(false)
     }
   }
 
-  const handleAddCard = async (card: any, index: number) => {
+  const handleAddCard = async (card: { front: string; back: string; notes?: string; suggested_tags?: string[] }, index: number) => {
     setIsAddingCards(true)
     try {
       await createCard.mutateAsync({
@@ -88,7 +89,7 @@ export function GenerateCardsDialog({ open, onOpenChange, deckId }: GenerateCard
       // Remove card from generated list
       setGeneratedCards(prev => prev.filter((_, i) => i !== index))
       toast.success('Card added to deck')
-    } catch (error) {
+    } catch {
       toast.error('Failed to add card')
     } finally {
       setIsAddingCards(false)
@@ -110,7 +111,7 @@ export function GenerateCardsDialog({ open, onOpenChange, deckId }: GenerateCard
       toast.success(`Added ${generatedCards.length} cards to deck`)
       setGeneratedCards([])
       onOpenChange(false)
-    } catch (error) {
+    } catch {
       toast.error('Failed to add all cards')
     } finally {
       setIsAddingCards(false)

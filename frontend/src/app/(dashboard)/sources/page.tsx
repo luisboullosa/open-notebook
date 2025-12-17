@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { sourcesApi } from '@/lib/api/sources'
 import { SourceListResponse } from '@/lib/types/api'
+import { EmbeddingStatusBanner } from './EmbeddingStatusBanner'
+import { EmbeddingTaskTracker } from '../settings/components/EmbeddingTaskTracker'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { EmptyState } from '@/components/common/EmptyState'
 import { AppShell } from '@/components/layout/AppShell'
@@ -34,6 +36,7 @@ export default function SourcesPage() {
   const loadingMoreRef = useRef(false)
   const hasMoreRef = useRef(true)
   const PAGE_SIZE = 30
+  const [showDetails, setShowDetails] = useState(false)
 
   const fetchSources = useCallback(async (reset = false) => {
     try {
@@ -57,6 +60,7 @@ export default function SourcesPage() {
         offset: offsetRef.current,
         sort_by: sortBy,
         sort_order: sortOrder,
+        include_stats: true,
       })
 
       if (reset) {
@@ -282,10 +286,28 @@ export default function SourcesPage() {
     <AppShell>
       <div className="flex flex-col h-full w-full max-w-none px-6 py-6">
         <div className="mb-6 flex-shrink-0">
-          <h1 className="text-3xl font-bold">All Sources</h1>
-          <p className="mt-2 text-muted-foreground">
-            Browse all sources across your notebooks. Use arrow keys to navigate and Enter to open.
-          </p>
+          <EmbeddingStatusBanner />
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold">All Sources</h1>
+              <p className="mt-2 text-muted-foreground">
+                Browse all sources across your notebooks. Use arrow keys to navigate and Enter to open.
+              </p>
+            </div>
+            <div>
+              <button
+                className="text-sm text-primary hover:underline"
+                onClick={() => setShowDetails(prev => !prev)}
+              >
+                {showDetails ? 'Hide embedding details' : 'Show embedding details'}
+              </button>
+            </div>
+          </div>
+          {showDetails && (
+            <div className="mt-4">
+              <EmbeddingTaskTracker />
+            </div>
+          )}
         </div>
 
         <div ref={scrollContainerRef} className="flex-1 rounded-md border overflow-auto">

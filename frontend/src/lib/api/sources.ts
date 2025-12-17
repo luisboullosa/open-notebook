@@ -17,6 +17,7 @@ export const sourcesApi = {
     offset?: number
     sort_by?: 'created' | 'updated'
     sort_order?: 'asc' | 'desc'
+    include_stats?: boolean
   }) => {
     const response = await apiClient.get<SourceListResponse[]>('/sources', { params })
     return response.data

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import ReactMarkdown from 'react-markdown'
 import { sourcesApi } from '@/lib/api/sources'
@@ -121,6 +122,8 @@ export function SourceDetailContent({
     }
   }, [])
 
+  const queryClient = useQueryClient()
+
   useEffect(() => {
     if (sourceId) {
       void fetchSource()
@@ -149,8 +152,9 @@ export function SourceDetailContent({
     } catch (err) {
       console.error('Failed to create insight:', err)
       if (err && typeof err === 'object' && 'response' in err) {
-        console.error('Response data:', (err as any).response?.data)
-        console.error('Response status:', (err as any).response?.status)
+        const resp = (err as { response?: { data?: unknown; status?: number } }).response
+        console.error('Response data:', resp?.data)
+        console.error('Response status:', resp?.status)
       }
       toast.error('Failed to create insight')
     } finally {
@@ -179,7 +183,9 @@ export function SourceDetailContent({
       setIsEmbedding(true)
       const response = await embeddingApi.embedContent(sourceId, 'source')
       toast.success(response.message)
+      // Refresh source details and embedding task summary
       await fetchSource()
+      queryClient.invalidateQueries({ queryKey: ['embedding-tasks-summary'] })
     } catch (err) {
       console.error('Failed to embed content:', err)
       toast.error('Failed to embed content')

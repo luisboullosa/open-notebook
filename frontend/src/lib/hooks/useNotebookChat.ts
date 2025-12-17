@@ -211,19 +211,19 @@ export function useNotebookChat({ notebookId, sources, notes, contextSelections 
       })
 
       // Replace temp message with real messages from API
-      // Keep all non-temp messages and add the new ones
-      setMessages(prev => {
-        const withoutTemp = prev.filter(m => !m.id.startsWith('temp-'))
-        return response.messages
-      })
+      setMessages(response.messages)
 
       // Refetch current session to get updated data
       await refetchCurrentSession()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error sending message:', error)
-      
-      // Check for specific error types
-      const errorMessage = error?.response?.data?.detail || error?.message || 'Unknown error'
+
+      // Normalize error message safely
+      let errorMessage = 'Unknown error'
+      if (typeof error === 'object' && error !== null) {
+        const e = error as { response?: { data?: { detail?: string } }; message?: string }
+        errorMessage = e.response?.data?.detail || e.message || errorMessage
+      }
       
       if (errorMessage.includes('not found') && errorMessage.includes('model')) {
         // Extract model name from error message

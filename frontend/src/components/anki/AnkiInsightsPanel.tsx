@@ -23,7 +23,7 @@ export function AnkiInsightsPanel({ notebookId, deckId, onCardsCreated }: AnkiIn
   const [isCreating, setIsCreating] = useState(false)
   const [expandedInsights, setExpandedInsights] = useState<Record<string, boolean>>({})
 
-  const { data: insights, isLoading, refetch } = useQuery({
+  const { data: insights, isLoading } = useQuery({
     queryKey: ['anki-insights', notebookId],
     queryFn: () => ankiApi.getNotebookAnkiInsights(notebookId),
     refetchOnWindowFocus: false,
@@ -82,8 +82,9 @@ export function AnkiInsightsPanel({ notebookId, deckId, onCardsCreated }: AnkiIn
       })
       
       onCardsCreated?.()
-    } catch (error: any) {
-      toast.error(error?.response?.data?.detail || 'Failed to create cards')
+    } catch (error: unknown) {
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error(detail || 'Failed to create cards')
     } finally {
       setIsCreating(false)
     }

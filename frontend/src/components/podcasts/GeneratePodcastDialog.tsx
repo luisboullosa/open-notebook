@@ -103,7 +103,7 @@ export function GeneratePodcastDialog({ open, onOpenChange }: GeneratePodcastDia
   const sourcesQueries = useQueries({
     queries: notebooks.map((notebook) => ({
       queryKey: QUERY_KEYS.sources(notebook.id),
-      queryFn: () => sourcesApi.list({ notebook_id: notebook.id }),
+      queryFn: () => sourcesApi.list({ notebook_id: notebook.id, include_stats: true }),
       enabled:
         open &&
         (expandedNotebooks.includes(notebook.id) || hasSelections(selections[notebook.id])),
@@ -577,7 +577,7 @@ export function GeneratePodcastDialog({ open, onOpenChange }: GeneratePodcastDia
                                 handleNotebookToggle(notebook.id, checked)
                                 queryClient.prefetchQuery({
                                   queryKey: QUERY_KEYS.sources(notebook.id),
-                                  queryFn: () => sourcesApi.list({ notebook_id: notebook.id }),
+                                  queryFn: () => sourcesApi.list({ notebook_id: notebook.id, include_stats: true }),
                                 })
                                 queryClient.prefetchQuery({
                                   queryKey: QUERY_KEYS.notes(notebook.id),

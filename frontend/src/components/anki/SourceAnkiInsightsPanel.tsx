@@ -81,8 +81,9 @@ export function SourceAnkiInsightsPanel({ sourceId, deckId, onCardsCreated }: So
       })
       
       onCardsCreated?.()
-    } catch (error: any) {
-      toast.error(error?.response?.data?.detail || 'Failed to create cards')
+    } catch (error: unknown) {
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error(detail || 'Failed to create cards')
     } finally {
       setIsCreating(false)
     }

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+// Avoid importing `Metadata` type from 'next' to prevent missing-declaration build errors.
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -10,7 +10,7 @@ import { themeScript } from "@/lib/theme-script";
 
 const inter = Inter({ subsets: ["latin"] });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "Open Notebook",
   description: "Privacy-focused research and knowledge management",
 };

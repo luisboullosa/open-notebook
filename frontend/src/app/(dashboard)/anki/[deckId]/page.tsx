@@ -73,7 +73,7 @@ export default function DeckDetailPage() {
           <div className="text-center">
             <h1 className="text-2xl font-bold mb-4">Deck Not Found</h1>
             <p className="text-muted-foreground mb-4">
-              The deck you're looking for doesn't exist or has been deleted.
+              The deck you&apos;re looking for doesn&apos;t exist or has been deleted.
             </p>
             <Button onClick={() => router.push('/anki')}>
               <ArrowLeft className="mr-2 h-4 w-4" />
