@@ -16,7 +16,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "0.0.0.0:11434:11434"
+      - "0.0.0.0:11435:11434"
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
@@ -81,12 +81,17 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  service-navigator:
+    image: nginx:alpine
+    ports:
+      - "8090:80"  # Landing page for all services
+    volumes:
+      - ./setup_guide/service-navigator/index.html:/usr/share/nginx/html/index.html:ro
+    restart: unless-stopped
   
   open_notebook:
     image: lfnovo/open_notebook:v1-latest-single
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
     ports:
       - "8502:8502"
       - "5055:5055"
@@ -103,10 +108,6 @@ services:
         condition: service_started
     volumes:
       - ./notebook_data:/app/data
-      - .:/app
-      - frontend_node_modules:/app/frontend/node_modules
-      - /app/.venv
-      - /app/open_notebook.egg-info
     environment:
       - SURREAL_URL=ws://surrealdb:8000
       - OLLAMA_BASE_URL=http://ollama:11434
@@ -120,4 +121,3 @@ volumes:
   ollama_data:
   whisper-models:
   piper-data:
-  frontend_node_modules:

@@ -42,7 +42,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "11434:11434"  # Accessible from LAN
+      - "11435:11434"  # Accessible from LAN (11434 reserved by host ollama)
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
@@ -107,6 +107,20 @@ services:
       - piper_data:/config
     ports:
       - "10200:10200"  # Accessible from LAN
+    restart: unless-stopped
+
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:latest
+    ports:
+      - "8080:8080"  # Accessible from LAN
+    restart: unless-stopped
+
+  service-navigator:
+    image: nginx:alpine
+    ports:
+      - "8090:80"  # Landing page for all services
+    volumes:
+      - ./setup_guide/service-navigator/index.html:/usr/share/nginx/html/index.html:ro
     restart: unless-stopped
 
 volumes:
