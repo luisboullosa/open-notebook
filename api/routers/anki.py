@@ -56,6 +56,7 @@ class CardCreateRequest(BaseModel):
     notes: Optional[str] = None
     deck_id: str
     tags: List[str] = []
+    card_type: Optional[str] = None
 
 
 class CardUpdateRequest(BaseModel):
@@ -64,6 +65,12 @@ class CardUpdateRequest(BaseModel):
     back: Optional[str] = None
     notes: Optional[str] = None
     tags: Optional[List[str]] = None
+    card_type: Optional[str] = None
+
+
+class CardRatingRequest(BaseModel):
+    """Request to rate a card (1-5 stars)."""
+    rating: int = Field(..., ge=1, le=5, description="Rating from 1 (hard) to 5 (easy)")
 
 
 class DeckCreateRequest(BaseModel):
@@ -117,6 +124,10 @@ async def create_card(request: CardCreateRequest):
             deck_id=request.deck_id,
             tags=request.tags,
         )
+        # Set card_type if provided
+        if request.card_type:
+            created_card.card_type = request.card_type
+            await created_card.save()
         logger.info(f"Created card: {created_card.id}")
         
         return created_card
@@ -194,6 +205,56 @@ async def delete_card(card_id: str):
         
     except Exception as e:
         logger.error(f"Failed to delete card: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/cards/{card_id}/rating", response_model=AnkiCard)
+async def rate_card(card_id: str, request: CardRatingRequest):
+    """
+    Rate a card from 1 (very hard / bad quality) to 5 (very easy / perfect quality).
+    
+    Ratings guide future card generation prompts:
+    - 1-2: Card is too hard or poorly formed → use as negative example
+    - 3: Neutral / acceptable
+    - 4-5: Card is well-formed and effective → use as positive example
+    """
+    try:
+        service = AnkiService()
+        card = await service.get_card(card_id)
+        if not card:
+            raise HTTPException(status_code=404, detail="Card not found")
+        
+        card.user_rating = request.rating
+        await card.save()
+        logger.info(f"Rated card {card_id}: {request.rating}/5")
+        return card
+        
+    except HTTPException:
+        raise
+    except InvalidInputError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to rate card: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/cards/{card_id}/study")
+async def record_card_study(card_id: str):
+    """Record that a card was studied (increments study_count)."""
+    try:
+        service = AnkiService()
+        card = await service.get_card(card_id)
+        if not card:
+            raise HTTPException(status_code=404, detail="Card not found")
+        
+        card.study_count = (card.study_count or 0) + 1
+        await card.save()
+        return {"success": True, "study_count": card.study_count}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to record study: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -893,3 +954,224 @@ async def create_cards_from_insight(
     except Exception as e:
         logger.error(f"Failed to create cards from insight: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# APKG Export
+# ============================================================================
+
+
+@router.get("/decks/{deck_id}/export")
+async def export_deck_as_apkg(
+    deck_id: str,
+    include_audio: bool = Query(True),
+):
+    """
+    Export a deck as an Anki-compatible .apkg file.
+    
+    The exported file can be imported directly into Anki desktop or AnkiMobile.
+    Audio files (if any) are bundled into the package.
+    """
+    try:
+        import hashlib
+        import os
+        import tempfile
+
+        import genanki
+        from fastapi import BackgroundTasks
+        from starlette.background import BackgroundTask
+
+        service = AnkiService()
+        deck = await service.get_deck(deck_id)
+        if not deck:
+            raise HTTPException(status_code=404, detail="Deck not found")
+
+        cards = await service.get_cards_by_deck(deck_id)
+        if not cards:
+            raise HTTPException(status_code=400, detail="Deck has no cards to export")
+
+        # Generate stable numeric IDs from string IDs
+        def _stable_id(text: str) -> int:
+            return int(hashlib.md5(text.encode()).hexdigest()[:8], 16)
+
+        deck_numeric_id = _stable_id(str(deck.id))
+        model_numeric_id = _stable_id(f"model_{str(deck.id)}")
+
+        # Define Anki note model with front/back fields
+        anki_model = genanki.Model(
+            model_numeric_id,
+            "Open Notebook Card",
+            fields=[
+                {"name": "Front"},
+                {"name": "Back"},
+                {"name": "Notes"},
+                {"name": "Audio"},
+                {"name": "Image"},
+            ],
+            templates=[
+                {
+                    "name": "Card 1",
+                    "qfmt": "{{Front}}{{Audio}}",
+                    "afmt": '{{FrontSide}}<hr id="answer">{{Back}}<br><small>{{Notes}}</small>{{Image}}',
+                },
+            ],
+        )
+
+        anki_deck = genanki.Deck(deck_numeric_id, deck.name)
+        media_files = []
+
+        for card in cards:
+            audio_field = ""
+            image_field = ""
+
+            # Add audio if available
+            if include_audio and card.audio_metadata and card.audio_metadata.reference_mp3:
+                audio_path = card.audio_metadata.reference_mp3
+                if os.path.exists(audio_path):
+                    audio_filename = os.path.basename(audio_path)
+                    audio_field = f"[sound:{audio_filename}]"
+                    media_files.append(audio_path)
+
+            # Add image if available
+            if card.image_metadata and card.image_metadata.cached_path:
+                img_path = card.image_metadata.cached_path
+                if os.path.exists(img_path):
+                    img_filename = os.path.basename(img_path)
+                    image_field = f'<img src="{img_filename}">'
+                    media_files.append(img_path)
+
+            note = genanki.Note(
+                model=anki_model,
+                fields=[
+                    card.front,
+                    card.back,
+                    card.notes or "",
+                    audio_field,
+                    image_field,
+                ],
+                tags=card.tags,
+            )
+            anki_deck.add_note(note)
+
+        # Write to temp file and schedule cleanup after response is sent
+        with tempfile.NamedTemporaryFile(suffix=".apkg", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        package = genanki.Package(anki_deck)
+        package.media_files = media_files
+        package.write_to_file(tmp_path)
+
+        safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in deck.name)
+        filename = f"{safe_name}.apkg"
+
+        def _cleanup(path: str):
+            try:
+                if os.path.exists(path):
+                    os.unlink(path)
+            except Exception as exc:
+                logger.warning(f"Failed to clean up temp APKG file {path}: {exc}")
+
+        logger.info(f"Exported deck {deck_id} as {filename} ({len(cards)} cards)")
+        return FileResponse(
+            tmp_path,
+            media_type="application/octet-stream",
+            filename=filename,
+            background=BackgroundTask(_cleanup, tmp_path),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to export deck as APKG: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Ollama Models Check (for Anki config validation)
+# ============================================================================
+
+
+@router.get("/config/check")
+async def check_anki_config():
+    """
+    Check Anki-related configuration: Ollama availability, installed models,
+    and optional services (Piper TTS, Whisper STT, image APIs).
+    
+    Returns a status report to help users verify their setup.
+    """
+    import os
+
+    import httpx
+
+    report: Dict[str, Any] = {
+        "ollama": {"status": "unknown", "models": [], "error": None},
+        "piper_tts": {"status": "unknown", "error": None},
+        "whisper_stt": {"status": "unknown", "error": None},
+        "image_apis": {
+            "unsplash": os.getenv("UNSPLASH_ACCESS_KEY") is not None,
+            "pexels": os.getenv("PEXELS_API_KEY") is not None,
+            "pixabay": os.getenv("PIXABAY_API_KEY") is not None,
+        },
+        "recommended_models": {
+            "description": (
+                "For best results, install these Ollama models: "
+                "mxbai-embed-large (embeddings), qwen2.5:3b (card generation), "
+                "qwen2.5:1.5b (transformations)"
+            ),
+            "required": ["mxbai-embed-large"],
+            "recommended": ["qwen2.5:3b", "qwen2.5:1.5b", "qwen2.5:7b"],
+        },
+    }
+
+    ollama_base = os.getenv("OLLAMA_API_BASE", "http://ollama:11434")
+
+    # Check Ollama and list installed models
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{ollama_base}/api/tags")
+            resp.raise_for_status()
+            data = resp.json()
+            installed = [m.get("name", "") for m in data.get("models", [])]
+            report["ollama"]["status"] = "healthy"
+            report["ollama"]["models"] = installed
+
+            # Check which recommended models are installed
+            required = report["recommended_models"]["required"]
+            recommended = report["recommended_models"]["recommended"]
+            report["ollama"]["required_installed"] = [
+                m for m in required if any(m in inst for inst in installed)
+            ]
+            report["ollama"]["required_missing"] = [
+                m for m in required if not any(m in inst for inst in installed)
+            ]
+            report["ollama"]["recommended_installed"] = [
+                m for m in recommended if any(m in inst for inst in installed)
+            ]
+            report["ollama"]["recommended_missing"] = [
+                m for m in recommended if not any(m in inst for inst in installed)
+            ]
+    except Exception as e:
+        report["ollama"]["status"] = "unhealthy"
+        report["ollama"]["error"] = str(e)
+
+    # Check Piper TTS
+    piper_url = os.getenv("PIPER_API_URL", "http://piper:10200")
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.get(piper_url)
+        report["piper_tts"]["status"] = "healthy"
+    except Exception as e:
+        report["piper_tts"]["status"] = "unhealthy"
+        report["piper_tts"]["error"] = str(e)
+
+    # Check Whisper STT
+    whisper_url = os.getenv("WHISPER_API_URL", "http://whisper:9000")
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.get(whisper_url)
+        report["whisper_stt"]["status"] = "healthy"
+    except Exception as e:
+        report["whisper_stt"]["status"] = "unhealthy"
+        report["whisper_stt"]["error"] = str(e)
+
+    return report

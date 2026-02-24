@@ -1,0 +1,6 @@
+-- Migration 12: Add card_type, user_rating, and study_count to anki_card
+-- These fields support the study mode and card rating features
+
+DEFINE FIELD IF NOT EXISTS card_type ON TABLE anki_card TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS user_rating ON TABLE anki_card TYPE option<int>;
+DEFINE FIELD IF NOT EXISTS study_count ON TABLE anki_card TYPE int DEFAULT 0;

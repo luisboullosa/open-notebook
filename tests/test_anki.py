@@ -567,3 +567,112 @@ class TestAnkiIntegration:
         assert "A1" in levels
         assert "B1" in levels
         assert "C2" in levels
+
+
+# ============================================================================
+# TEST SUITE 12: Card Type
+# ============================================================================
+
+
+class TestCardType:
+    """Test suite for card_type field."""
+
+    def test_card_type_defaults_to_none(self):
+        """Test that card_type is None by default."""
+        card = AnkiCard(front="werken", back="to work")
+        assert card.card_type is None
+
+    def test_card_type_translation(self):
+        """Test card with translation type."""
+        card = AnkiCard(front="werken", back="to work", card_type="translation")
+        assert card.card_type == "translation"
+
+    def test_card_type_fill_in_the_blank(self):
+        """Test card with fill-in-the-blank type."""
+        card = AnkiCard(
+            front="Ik ___ elke dag naar mijn werk",
+            back="ga",
+            card_type="fill-in-the-blank",
+        )
+        assert card.card_type == "fill-in-the-blank"
+
+    def test_card_type_grammar(self):
+        """Test card with grammar type."""
+        card = AnkiCard(
+            front="How do you form the past tense of regular verbs?",
+            back="stem + -te/-de for singular, stem + -ten/-den for plural",
+            card_type="grammar",
+        )
+        assert card.card_type == "grammar"
+
+    def test_card_type_phrase(self):
+        """Test card with phrase type."""
+        card = AnkiCard(
+            front="Hoe gaat het?",
+            back="How are you? / How's it going?",
+            card_type="phrase",
+        )
+        assert card.card_type == "phrase"
+
+
+# ============================================================================
+# TEST SUITE 13: User Rating and Study Count
+# ============================================================================
+
+
+class TestUserRatingAndStudyCount:
+    """Test suite for user_rating and study_count fields."""
+
+    def test_user_rating_defaults_to_none(self):
+        """Test that user_rating is None (not yet rated) by default."""
+        card = AnkiCard(front="werken", back="to work")
+        assert card.user_rating is None
+
+    def test_study_count_defaults_to_zero(self):
+        """Test that study_count is 0 by default."""
+        card = AnkiCard(front="werken", back="to work")
+        assert card.study_count == 0
+
+    def test_valid_rating_1(self):
+        """Test rating of 1 (Again / very hard)."""
+        card = AnkiCard(front="werken", back="to work", user_rating=1)
+        assert card.user_rating == 1
+
+    def test_valid_rating_5(self):
+        """Test rating of 5 (Perfect / very easy)."""
+        card = AnkiCard(front="werken", back="to work", user_rating=5)
+        assert card.user_rating == 5
+
+    def test_invalid_rating_zero(self):
+        """Test that rating of 0 raises validation error."""
+        with pytest.raises(InvalidInputError, match="User rating must be between 1 and 5"):
+            AnkiCard(front="werken", back="to work", user_rating=0)
+
+    def test_invalid_rating_six(self):
+        """Test that rating of 6 raises validation error."""
+        with pytest.raises(InvalidInputError, match="User rating must be between 1 and 5"):
+            AnkiCard(front="werken", back="to work", user_rating=6)
+
+    def test_study_count_can_be_incremented(self):
+        """Test that study_count can be set to a positive value."""
+        card = AnkiCard(front="werken", back="to work", study_count=5)
+        assert card.study_count == 5
+
+    def test_all_valid_ratings(self):
+        """Test that all ratings 1-5 are valid."""
+        for rating in range(1, 6):
+            card = AnkiCard(front="test", back="test", user_rating=rating)
+            assert card.user_rating == rating
+
+    def test_card_with_rating_and_card_type(self):
+        """Test that a card can have both rating and card_type set."""
+        card = AnkiCard(
+            front="Ik ___ naar huis",
+            back="ga",
+            card_type="fill-in-the-blank",
+            user_rating=4,
+            study_count=3,
+        )
+        assert card.card_type == "fill-in-the-blank"
+        assert card.user_rating == 4
+        assert card.study_count == 3

@@ -9,6 +9,7 @@ export interface AnkiCard {
   front: string
   back: string
   notes?: string
+  card_type?: string
   deck_id: string
   export_session_id?: string
   source_citation?: SourceCitation
@@ -19,6 +20,8 @@ export interface AnkiCard {
   audio_metadata?: AudioMetadata
   tags: string[]
   metadata?: Record<string, unknown>
+  user_rating?: number
+  study_count?: number
   created_at?: string
   updated_at?: string
 }
@@ -89,6 +92,7 @@ export interface CardCreateRequest {
   notes?: string
   deck_id: string
   tags?: string[]
+  card_type?: string
 }
 
 export interface CardUpdateRequest {
@@ -96,7 +100,22 @@ export interface CardUpdateRequest {
   back?: string
   notes?: string
   tags?: string[]
+  card_type?: string
 }
+
+export const CARD_TYPES = [
+  { value: 'translation', label: 'Translation' },
+  { value: 'fill-in-the-blank', label: 'Fill in the Blank' },
+  { value: 'grammar', label: 'Grammar Focus' },
+  { value: 'phrase', label: 'Phrase / Expression' },
+  { value: 'visual-context', label: 'Visual Context' },
+  { value: 'word-family', label: 'Word Family' },
+  { value: 'conversation', label: 'Conversation' },
+  { value: 'collocations', label: 'Collocations' },
+  { value: 'false-friends', label: 'False Friends' },
+  { value: 'synonyms', label: 'Synonyms / Register' },
+  { value: 'homonyms', label: 'Homonyms / Confusables' },
+] as const
 
 export interface DeckCreateRequest {
   name: string
@@ -171,6 +190,18 @@ export const ankiApi = {
       const response = await apiClient.get<AnkiCard[]>(`/anki/decks/${deckId}/cards`, { params })
       return response.data
     },
+
+    rate: async (cardId: string, rating: number) => {
+      const response = await apiClient.put<AnkiCard>(`/anki/cards/${cardId}/rating`, { rating })
+      return response.data
+    },
+
+    recordStudy: async (cardId: string) => {
+      const response = await apiClient.post<{ success: boolean; study_count: number }>(
+        `/anki/cards/${cardId}/study`
+      )
+      return response.data
+    },
   },
 
   // ============================================================================
@@ -197,6 +228,14 @@ export const ankiApi = {
       await apiClient.delete(`/anki/decks/${deckId}`, {
         params: { delete_cards: deleteCards },
       })
+    },
+
+    exportApkg: async (deckId: string, includeAudio: boolean = true) => {
+      const response = await apiClient.get(
+        `/anki/decks/${encodeURIComponent(deckId)}/export`,
+        { params: { include_audio: includeAudio }, responseType: 'blob' }
+      )
+      return response
     },
   },
 
@@ -364,6 +403,33 @@ export const ankiApi = {
     }>(`/anki/decks/${encodeURIComponent(deckId)}/insights/${encodeURIComponent(insightId)}/create-cards`, {
       card_indices: cardIndices
     })
+    return response.data
+  },
+
+  // ============================================================================
+  // Config Check
+  // ============================================================================
+
+  checkConfig: async () => {
+    const response = await apiClient.get<{
+      ollama: {
+        status: string
+        models: string[]
+        error: string | null
+        required_installed?: string[]
+        required_missing?: string[]
+        recommended_installed?: string[]
+        recommended_missing?: string[]
+      }
+      piper_tts: { status: string; error: string | null }
+      whisper_stt: { status: string; error: string | null }
+      image_apis: { unsplash: boolean; pexels: boolean; pixabay: boolean }
+      recommended_models: {
+        description: string
+        required: string[]
+        recommended: string[]
+      }
+    }>('/anki/config/check')
     return response.data
   },
 }

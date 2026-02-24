@@ -358,3 +358,85 @@ export function useExportSession(sessionId: string) {
     enabled: !!sessionId,
   })
 }
+
+// ============================================================================
+// Card Rating & Study Hooks
+// ============================================================================
+
+export function useRateCard() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+
+  return useMutation({
+    mutationFn: ({ cardId, rating }: { cardId: string; rating: number }) =>
+      ankiApi.cards.rate(cardId, rating),
+    onSuccess: (card, variables) => {
+      queryClient.invalidateQueries({ queryKey: ANKI_QUERY_KEYS.card(variables.cardId) })
+      queryClient.invalidateQueries({ queryKey: ANKI_QUERY_KEYS.deckCards(card.deck_id) })
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: (error as { response?: { data?: { detail?: string } } }).response?.data?.detail || 'Failed to rate card',
+        variant: 'destructive',
+      })
+    },
+  })
+}
+
+export function useRecordStudy() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (cardId: string) => ankiApi.cards.recordStudy(cardId),
+    onSuccess: (_, cardId) => {
+      queryClient.invalidateQueries({ queryKey: ANKI_QUERY_KEYS.card(cardId) })
+    },
+  })
+}
+
+// ============================================================================
+// APKG Export Hook
+// ============================================================================
+
+export function useExportDeckApkg() {
+  const { toast } = useToast()
+
+  return useMutation({
+    mutationFn: async ({ deckId, deckName, includeAudio }: { deckId: string; deckName: string; includeAudio?: boolean }) => {
+      const response = await ankiApi.decks.exportApkg(deckId, includeAudio)
+      // Trigger browser download
+      const blob = new Blob([response.data as BlobPart], { type: 'application/octet-stream' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      const safeName = deckName.replace(/[^a-z0-9\-_ ]/gi, '_')
+      link.download = `${safeName}.apkg`
+      link.click()
+      window.URL.revokeObjectURL(url)
+    },
+    onSuccess: () => {
+      toast({ title: 'Success', description: 'Deck exported as .apkg file' })
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Export Failed',
+        description: (error as { response?: { data?: { detail?: string } } }).response?.data?.detail || 'Failed to export deck',
+        variant: 'destructive',
+      })
+    },
+  })
+}
+
+// ============================================================================
+// Config Check Hook
+// ============================================================================
+
+export function useAnkiConfigCheck() {
+  return useQuery({
+    queryKey: ['anki', 'config', 'check'],
+    queryFn: () => ankiApi.checkConfig(),
+    staleTime: 60 * 1000, // 1 minute
+    retry: false,
+  })
+}

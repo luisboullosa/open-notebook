@@ -1,0 +1,4 @@
+-- Rollback Migration 12: Remove card_type, user_rating, and study_count from anki_card
+REMOVE FIELD IF EXISTS card_type ON TABLE anki_card;
+REMOVE FIELD IF EXISTS user_rating ON TABLE anki_card;
+REMOVE FIELD IF EXISTS study_count ON TABLE anki_card;

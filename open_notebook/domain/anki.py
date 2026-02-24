@@ -58,6 +58,9 @@ class AnkiCard(ObjectModel):
     back: str
     notes: Optional[str] = None
     
+    # Card type: translation, fill-in-the-blank, grammar, phrase, visual, audio, etc.
+    card_type: Optional[str] = None
+    
     # Relationships
     deck_id: Optional[str] = None  # Reference to AnkiDeck
     export_session_id: Optional[str] = None  # Reference to AnkiExportSession
@@ -74,6 +77,11 @@ class AnkiCard(ObjectModel):
     tags: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
     
+    # User rating: 1-5 stars (None = not yet rated)
+    user_rating: Optional[int] = None
+    # Total study sessions where this card was seen
+    study_count: int = 0
+    
     @field_validator("front", "back")
     @classmethod
     def fields_must_not_be_empty(cls, v):
@@ -89,6 +97,13 @@ class AnkiCard(ObjectModel):
             if v.upper() not in valid_levels:
                 raise InvalidInputError(f"CEFR level must be one of {valid_levels}")
             return v.upper()
+        return v
+    
+    @field_validator("user_rating")
+    @classmethod
+    def validate_user_rating(cls, v):
+        if v is not None and v not in range(1, 6):
+            raise InvalidInputError("User rating must be between 1 and 5")
         return v
     
     async def get_deck(self) -> Optional["AnkiDeck"]:

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
+import { Plus, Settings2 } from 'lucide-react'
 import { AppShell } from '@/components/layout/AppShell'
 import { DeckList, CreateDeckDialog, CreateCardDialog } from '@/components/anki'
 import type { AnkiDeck } from '@/lib/api/anki'
@@ -45,10 +45,16 @@ export default function AnkiPage() {
               Create and manage your language learning flashcards
             </p>
           </div>
-          <Button onClick={() => setCreateDeckOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Deck
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => router.push('/anki/config')}>
+              <Settings2 className="mr-2 h-4 w-4" />
+              Config Check
+            </Button>
+            <Button onClick={() => setCreateDeckOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Deck
+            </Button>
+          </div>
         </div>
 
         <DeckList

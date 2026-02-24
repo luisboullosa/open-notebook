@@ -3,10 +3,10 @@
 import React, { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Plus, Play, Sparkles } from 'lucide-react'
+import { ArrowLeft, Plus, Play, Sparkles, Download } from 'lucide-react'
 import { AppShell } from '@/components/layout/AppShell'
 import { AnkiCard, CreateCardDialog } from '@/components/anki'
-import { useDeck, useDeckCards, useDeleteCard } from '@/lib/hooks/use-anki'
+import { useDeck, useDeckCards, useDeleteCard, useExportDeckApkg } from '@/lib/hooks/use-anki'
 import type { AnkiCard as AnkiCardType } from '@/lib/api/anki'
 import { Skeleton } from '@/components/ui/skeleton'
 import { GenerateCardsDialog } from '@/components/anki/GenerateCardsDialog'
@@ -27,6 +27,7 @@ export default function DeckDetailPage() {
   const { data: cards, isLoading: isCardsLoading, refetch: refetchCards } = useDeckCards(deckId)
   const { data: notebooks } = useNotebooks()
   const deleteCard = useDeleteCard()
+  const exportDeck = useExportDeckApkg()
 
   const handleEditCard = (card: AnkiCardType) => {
     setSelectedCard(card)
@@ -44,6 +45,11 @@ export default function DeckDetailPage() {
       const audio = new Audio(card.audio_metadata.reference_mp3)
       audio.play()
     }
+  }
+
+  const handleExport = () => {
+    if (!deck) return
+    exportDeck.mutate({ deckId, deckName: deck.name, includeAudio: true })
   }
 
   const handleStartStudy = () => {
@@ -114,6 +120,14 @@ export default function DeckDetailPage() {
               <Button onClick={handleStartStudy} disabled={!cards || cards.length === 0}>
                 <Play className="mr-2 h-4 w-4" />
                 Start Study
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleExport}
+                disabled={!cards || cards.length === 0 || exportDeck.isPending}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Export .apkg
               </Button>
               <Button variant="outline" onClick={() => setGenerateCardsOpen(true)}>
                 <Sparkles className="mr-2 h-4 w-4" />
