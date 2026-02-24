@@ -134,3 +134,22 @@ specs/
 .claude
 
 .playwright-mcp/
+docker.orangepi.env
+duckdns.env
+HARDWARE_RECOMMENDATIONS.md
+.secrets/A Frequency Dictionary of Dutch Core Vocabulary for Learners (Routledge Frequency Dictionaries) (Carole Tiberius, Tanneke Schoonheim).pdf
+.secrets/docker.orangepi copy.env
+.secrets/Dockerfile
+.secrets/Dockerfile.dev
+.secrets/Dockerfile.single
+.secrets/orangepi.env
+.secrets/letsencrypt/README.md
+docs/development/clean-restart-workflow.md
+letsencrypt/acme.json
+local_backups/20260218-161741/current_branch.txt
+local_backups/20260218-161741/git_status_short.txt
+local_backups/20260218-161741/preserved_paths.txt
+local_backups/20260218-161741/recent_commits.txt
+scripts/clean_restart_from_upstream.ps1
+scripts/piper_http_proxy.py
+scripts/piper_wyoming_out.raw
