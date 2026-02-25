@@ -138,6 +138,7 @@ specs/
 # Local-only secrets and runtime artifacts
 .secrets/
 duckdns.env
+docker.orangepi.local.env
 letsencrypt/
 local_backups/
 scripts/piper_wyoming_out.raw

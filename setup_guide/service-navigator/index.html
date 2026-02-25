@@ -22,17 +22,22 @@
   <script>
     const host = window.location.hostname || 'localhost';
     const services = [
-      { name: 'Open Notebook UI', port: 8502, note: 'Main app' },
-      { name: 'Open Notebook API', port: 5055, note: 'REST API' },
-      { name: 'Stirling PDF', port: 8080, note: 'PDF tools' },
-      { name: 'Ollama', port: 11435, note: 'Model server (container)' },
-      { name: 'Whisper', port: 9000, note: 'Speech-to-text' },
-      { name: 'Piper', port: 10200, note: 'Text-to-speech' }
+      { name: 'Open Notebook UI', url: () => `http://${host}:8502`, note: 'Main app' },
+      { name: 'Open Notebook API', url: () => `http://${host}:5055`, note: 'REST API' },
+      { name: 'Open Notebook API Docs', url: () => `http://${host}:5055/docs`, note: 'Swagger docs' },
+      { name: 'Anki UI', url: () => `http://${host}:8503/anki`, note: 'Standalone Anki app' },
+      { name: 'Anki API', url: () => `http://${host}:5056`, note: 'Standalone Anki backend' },
+      { name: 'Anki API Docs', url: () => `http://${host}:5056/docs`, note: 'Standalone API docs' },
+      { name: 'Project Docs (GitHub)', url: () => 'https://github.com/lfnovo/open-notebook/tree/main/docs', note: 'Documentation index' },
+      { name: 'Stirling PDF', url: () => `http://${host}:8080`, note: 'PDF tools' },
+      { name: 'Ollama', url: () => `http://${host}:11435`, note: 'Model server (container)' },
+      { name: 'Whisper', url: () => `http://${host}:9000`, note: 'Speech-to-text' },
+      { name: 'Piper', url: () => `http://${host}:10200`, note: 'Text-to-speech' }
     ];
 
     const list = document.getElementById('links');
     services.forEach((service) => {
-      const url = `http://${host}:${service.port}`;
+      const url = service.url();
       const li = document.createElement('li');
       li.innerHTML = `<a href="${url}" target="_blank" rel="noopener">${service.name}</a><span class="muted">${url} · ${service.note}</span>`;
       list.appendChild(li);
