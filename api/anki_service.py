@@ -1,6 +1,7 @@
 """
 Anki service layer for card management, CRUD operations, and lifecycle management.
 """
+import json
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -33,10 +34,105 @@ class AnkiService:
         self.audio_dir = self.anki_data_dir / "audio"
         self.cache_dir = self.images_dir / "cache"
         self.uploads_dir = self.images_dir / "uploads"
+        self.feedback_file = self.anki_data_dir / "generation_feedback.jsonl"
         
         # Ensure directories exist
         for dir_path in [self.images_dir, self.audio_dir, self.cache_dir, self.uploads_dir]:
             dir_path.mkdir(parents=True, exist_ok=True)
+
+    def _load_generation_feedback_entries(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Load most recent generation feedback entries from disk."""
+        if not self.feedback_file.exists():
+            return []
+
+        try:
+            with self.feedback_file.open("r", encoding="utf-8") as handle:
+                lines = [line.strip() for line in handle if line.strip()]
+
+            entries: List[Dict[str, Any]] = []
+            for line in lines[-limit:]:
+                try:
+                    entry = json.loads(line)
+                    if isinstance(entry, dict):
+                        entries.append(entry)
+                except json.JSONDecodeError:
+                    continue
+            return entries
+        except Exception as e:
+            logger.warning(f"Failed to load generation feedback: {e}")
+            return []
+
+    def record_generation_feedback(
+        self,
+        *,
+        rating: int,
+        feedback_text: Optional[str],
+        prompt_template_key: Optional[str],
+        user_prompt: str,
+        model_id: Optional[str],
+        source_ids: List[str],
+        num_cards: int,
+        generated_cards_count: int,
+        accepted_cards_count: int = 0,
+    ) -> None:
+        """Persist user feedback for generated cards to improve future generations."""
+        payload: Dict[str, Any] = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "rating": rating,
+            "feedback_text": (feedback_text or "").strip(),
+            "prompt_template_key": prompt_template_key,
+            "user_prompt": user_prompt,
+            "model_id": model_id,
+            "source_ids": source_ids,
+            "num_cards": num_cards,
+            "generated_cards_count": generated_cards_count,
+            "accepted_cards_count": accepted_cards_count,
+        }
+
+        try:
+            with self.feedback_file.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        except Exception as e:
+            logger.warning(f"Failed to save generation feedback: {e}")
+
+    def build_feedback_guidance(self, limit: int = 40) -> str:
+        """Build short guidance text from recent user ratings/comments."""
+        entries = self._load_generation_feedback_entries(limit=limit)
+        if not entries:
+            return ""
+
+        strong_signals = [
+            (entry.get("feedback_text") or "").strip()
+            for entry in entries
+            if int(entry.get("rating", 0) or 0) >= 4 and (entry.get("feedback_text") or "").strip()
+        ][-3:]
+
+        weak_signals = [
+            (entry.get("feedback_text") or "").strip()
+            for entry in entries
+            if int(entry.get("rating", 0) or 0) <= 2 and (entry.get("feedback_text") or "").strip()
+        ][-3:]
+
+        if not strong_signals and not weak_signals:
+            return ""
+
+        guidance_lines: List[str] = [
+            "Recent user feedback to improve card quality:",
+        ]
+
+        if weak_signals:
+            guidance_lines.append("Avoid these recurring issues:")
+            guidance_lines.extend([f"- {note}" for note in weak_signals])
+
+        if strong_signals:
+            guidance_lines.append("Preserve these positive patterns:")
+            guidance_lines.extend([f"- {note}" for note in strong_signals])
+
+        guidance_lines.append(
+            "When uncertain, prefer concise, unambiguous cards with one concept per card."
+        )
+
+        return "\n".join(guidance_lines)
 
     # ===== Card CRUD Operations =====
 
@@ -415,8 +511,6 @@ class AnkiService:
         Returns:
             Dictionary with 'cards' list and 'model_used' string
         """
-        import json
-
         from ai_prompter import Prompter
 
         from open_notebook.domain.notebook import Source
@@ -465,6 +559,14 @@ class AnkiService:
                 "user_prompt": user_prompt,
                 "num_cards": num_cards
             })
+
+            feedback_guidance = self.build_feedback_guidance()
+            if feedback_guidance:
+                system_prompt = (
+                    f"{system_prompt}\n\n"
+                    "## Iterative Quality Guidance\n"
+                    f"{feedback_guidance}"
+                )
             
             # Get AI model
             # Note: model_id from user is Ollama model name, not a database ID

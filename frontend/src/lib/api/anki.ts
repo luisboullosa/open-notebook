@@ -9,6 +9,7 @@ export interface AnkiCard {
   front: string
   back: string
   notes?: string
+  card_type?: string
   deck_id: string
   export_session_id?: string
   source_citation?: SourceCitation
@@ -138,6 +139,48 @@ export interface AudioTranscribeResponse {
   phonetic_score: number
 }
 
+export interface AnkiPromptPreset {
+  key: string
+  title: string
+  description: string
+  instructions: string
+}
+
+export interface GenerationFeedbackRequest {
+  rating: number
+  feedback_text?: string
+  prompt_template_key?: string
+  user_prompt: string
+  model_id?: string
+  source_ids: string[]
+  num_cards: number
+  generated_cards_count: number
+  accepted_cards_count: number
+}
+
+export interface AnkiConfigCheckResponse {
+  ollama: {
+    status: string
+    error?: string | null
+    models: string[]
+    required_installed?: string[]
+    required_missing?: string[]
+    recommended_installed?: string[]
+  }
+  recommended_models: {
+    description: string
+    required: string[]
+    recommended: string[]
+  }
+  piper_tts: { status: string; error?: string | null }
+  whisper_stt: { status: string; error?: string | null }
+  image_apis: {
+    unsplash: boolean
+    pexels: boolean
+    pixabay: boolean
+  }
+}
+
 // ============================================================================
 // API Client
 // ============================================================================
@@ -169,6 +212,16 @@ export const ankiApi = {
 
     listByDeck: async (deckId: string, params?: { skip?: number; limit?: number }) => {
       const response = await apiClient.get<AnkiCard[]>(`/anki/decks/${deckId}/cards`, { params })
+      return response.data
+    },
+
+    rate: async (cardId: string, rating: number) => {
+      const response = await apiClient.post<{ success: boolean }>(`/anki/cards/${cardId}/rate`, { rating })
+      return response.data
+    },
+
+    recordStudy: async (cardId: string) => {
+      const response = await apiClient.post<{ success: boolean }>(`/anki/cards/${cardId}/study`)
       return response.data
     },
   },
@@ -292,9 +345,34 @@ export const ankiApi = {
   // AI Card Generation
   // ============================================================================
 
+  promptPresets: {
+    list: async () => {
+      const response = await apiClient.get<AnkiPromptPreset[]>('/anki/prompt-presets')
+      return response.data
+    },
+  },
+
+  feedback: {
+    submitGeneration: async (data: GenerationFeedbackRequest) => {
+      const response = await apiClient.post<{ success: boolean; message: string }>(
+        '/anki/feedback/generation',
+        data,
+      )
+      return response.data
+    },
+  },
+
+  config: {
+    check: async () => {
+      const response = await apiClient.get<AnkiConfigCheckResponse>('/anki/config-check')
+      return response.data
+    },
+  },
+
   generateCards: async (deckId: string, data: {
     source_ids: string[]
     user_prompt: string
+    prompt_template_key?: string
     model_id?: string
     num_cards?: number
   }) => {

@@ -26,6 +26,7 @@ import { ThemeToggle } from '@/components/common/ThemeToggle'
 import { Separator } from '@/components/ui/separator'
 import {
   Book,
+  BookOpen,
   Search,
   Mic,
   Bot,
@@ -50,6 +51,7 @@ const navigation = [
   {
     title: 'Process',
     items: [
+      { name: 'Anki Cards', href: '/anki', icon: BookOpen },
       { name: 'Notebooks', href: '/notebooks', icon: Book },
       { name: 'Ask and Search', href: '/search', icon: Search },
     ],

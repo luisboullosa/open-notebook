@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import ankiApi from '@/lib/api/anki'
+import type { AnkiPromptPreset } from '@/lib/api/anki'
 import { useCreateCard } from '@/lib/hooks/use-anki'
 
 interface GenerateCardsDialogProps {
@@ -23,19 +24,72 @@ interface GenerateCardsDialogProps {
   deckId: string
 }
 
+const RATING_LABELS: Record<number, string> = {
+  1: 'Poor',
+  2: 'Needs work',
+  3: 'Okay',
+  4: 'Good',
+  5: 'Excellent',
+}
+
 export function GenerateCardsDialog({ open, onOpenChange, deckId }: GenerateCardsDialogProps) {
   const [selectedNotebook, setSelectedNotebook] = useState<string>('')
   const [selectedSources, setSelectedSources] = useState<string[]>([])
   const [selectedModel, setSelectedModel] = useState('qwen2.5:3b')
+  const [promptPresets, setPromptPresets] = useState<AnkiPromptPreset[]>([])
+  const [selectedPromptPreset, setSelectedPromptPreset] = useState<string>('default-general')
   const [userPrompt, setUserPrompt] = useState('')
   const [numCards, setNumCards] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedCards, setGeneratedCards] = useState<any[]>([])
   const [isAddingCards, setIsAddingCards] = useState(false)
+  const [qualityRating, setQualityRating] = useState<number>(0)
+  const [feedbackText, setFeedbackText] = useState('')
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false)
+  const [acceptedCardsCount, setAcceptedCardsCount] = useState(0)
+  const [generationContext, setGenerationContext] = useState<{
+    sourceIds: string[]
+    modelId: string
+    promptTemplateKey?: string
+    userPrompt: string
+    numCards: number
+  } | null>(null)
 
   const { data: notebooks } = useNotebooks()
   const { data: sources } = useSources(selectedNotebook)
   const createCard = useCreateCard()
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const loadPresets = async () => {
+      try {
+        const presets = await ankiApi.promptPresets.list()
+        setPromptPresets(presets)
+
+        const defaultPreset = presets.find((preset) => preset.key === 'default-general') || presets[0]
+        if (defaultPreset) {
+          setSelectedPromptPreset(defaultPreset.key)
+          setUserPrompt(defaultPreset.instructions)
+        }
+      } catch (error) {
+        toast.error('Failed to load prompt presets')
+      }
+    }
+
+    void loadPresets()
+  }, [open])
+
+  const handleSelectPromptPreset = (presetKey: string) => {
+    setSelectedPromptPreset(presetKey)
+    const preset = promptPresets.find((item) => item.key === presetKey)
+    if (!preset) {
+      return
+    }
+    setUserPrompt(preset.instructions)
+  }
 
   const handleToggleSource = (sourceId: string) => {
     setSelectedSources(prev =>
@@ -60,11 +114,22 @@ export function GenerateCardsDialog({ open, onOpenChange, deckId }: GenerateCard
       const result = await ankiApi.generateCards(deckId, {
         source_ids: selectedSources,
         user_prompt: userPrompt,
+        prompt_template_key: selectedPromptPreset,
         model_id: selectedModel,
         num_cards: numCards
       })
 
       setGeneratedCards(result.cards)
+      setAcceptedCardsCount(0)
+      setQualityRating(0)
+      setFeedbackText('')
+      setGenerationContext({
+        sourceIds: selectedSources,
+        modelId: selectedModel,
+        promptTemplateKey: selectedPromptPreset,
+        userPrompt,
+        numCards,
+      })
       toast.success(`Generated ${result.cards.length} card${result.cards.length > 1 ? 's' : ''}`)
     } catch (error: any) {
       console.error('Error generating cards:', error)
@@ -85,6 +150,8 @@ export function GenerateCardsDialog({ open, onOpenChange, deckId }: GenerateCard
         deck_id: deckId
       })
 
+      setAcceptedCardsCount((count) => count + 1)
+
       // Remove card from generated list
       setGeneratedCards(prev => prev.filter((_, i) => i !== index))
       toast.success('Card added to deck')
@@ -98,6 +165,7 @@ export function GenerateCardsDialog({ open, onOpenChange, deckId }: GenerateCard
   const handleAddAllCards = async () => {
     setIsAddingCards(true)
     try {
+      const cardsToAdd = generatedCards.length
       for (const card of generatedCards) {
         await createCard.mutateAsync({
           front: card.front,
@@ -107,6 +175,7 @@ export function GenerateCardsDialog({ open, onOpenChange, deckId }: GenerateCard
           deck_id: deckId
         })
       }
+      setAcceptedCardsCount((count) => count + cardsToAdd)
       toast.success(`Added ${generatedCards.length} cards to deck`)
       setGeneratedCards([])
       onOpenChange(false)
@@ -117,12 +186,47 @@ export function GenerateCardsDialog({ open, onOpenChange, deckId }: GenerateCard
     }
   }
 
+  const handleSubmitFeedback = async () => {
+    if (!generationContext) {
+      toast.error('Generate cards first before submitting feedback')
+      return
+    }
+    if (qualityRating === 0) {
+      toast.error('Please rate the quality from 1 to 5')
+      return
+    }
+
+    setIsSubmittingFeedback(true)
+    try {
+      await ankiApi.feedback.submitGeneration({
+        rating: qualityRating,
+        feedback_text: feedbackText.trim() || undefined,
+        prompt_template_key: generationContext.promptTemplateKey,
+        user_prompt: generationContext.userPrompt,
+        model_id: generationContext.modelId,
+        source_ids: generationContext.sourceIds,
+        num_cards: generationContext.numCards,
+        generated_cards_count: generatedCards.length + acceptedCardsCount,
+        accepted_cards_count: acceptedCardsCount,
+      })
+      toast.success('Feedback saved. Future generations will use this quality signal.')
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Failed to save feedback')
+    } finally {
+      setIsSubmittingFeedback(false)
+    }
+  }
+
   const handleClose = () => {
     setSelectedNotebook('')
     setSelectedSources([])
     setUserPrompt('')
     setNumCards(1)
     setGeneratedCards([])
+    setQualityRating(0)
+    setFeedbackText('')
+    setAcceptedCardsCount(0)
+    setGenerationContext(null)
     onOpenChange(false)
   }
 
@@ -176,6 +280,28 @@ export function GenerateCardsDialog({ open, onOpenChange, deckId }: GenerateCard
               </ScrollArea>
             </div>
           )}
+
+          {/* Model Selection */}
+          <div className="space-y-2">
+            <Label>Prompt Preset</Label>
+            <Select value={selectedPromptPreset} onValueChange={handleSelectPromptPreset}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a prompt preset" />
+              </SelectTrigger>
+              <SelectContent>
+                {promptPresets.map((preset) => (
+                  <SelectItem key={preset.key} value={preset.key}>
+                    {preset.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {promptPresets.find((preset) => preset.key === selectedPromptPreset)?.description && (
+              <p className="text-xs text-muted-foreground">
+                {promptPresets.find((preset) => preset.key === selectedPromptPreset)?.description}
+              </p>
+            )}
+          </div>
 
           {/* Model Selection */}
           <div className="space-y-2">
@@ -285,6 +411,39 @@ export function GenerateCardsDialog({ open, onOpenChange, deckId }: GenerateCard
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="rounded-lg border p-4 space-y-3">
+                <h4 className="font-medium">Rate this generation</h4>
+                <div className="grid grid-cols-5 gap-2">
+                  {[1, 2, 3, 4, 5].map((rating) => (
+                    <Button
+                      key={rating}
+                      type="button"
+                      variant={qualityRating === rating ? 'default' : 'outline'}
+                      onClick={() => setQualityRating(rating)}
+                    >
+                      {rating} · {RATING_LABELS[rating]}
+                    </Button>
+                  ))}
+                </div>
+                <Textarea
+                  placeholder="What should we improve in the generated cards? (e.g., too verbose, missing examples, wrong level)"
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  This feedback is saved and reused to improve future card-generation prompts.
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleSubmitFeedback}
+                  disabled={isSubmittingFeedback || qualityRating === 0}
+                >
+                  {isSubmittingFeedback ? 'Saving feedback...' : 'Save Feedback'}
+                </Button>
               </div>
             </div>
           )}

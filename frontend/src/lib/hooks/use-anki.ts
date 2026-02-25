@@ -21,6 +21,7 @@ export const ANKI_QUERY_KEYS = {
   deckCards: (deckId: string) => ['anki', 'decks', deckId, 'cards'] as const,
   card: (cardId: string) => ['anki', 'cards', cardId] as const,
   exportSession: (sessionId: string) => ['anki', 'export-sessions', sessionId] as const,
+  configCheck: ['anki', 'config-check'] as const,
 }
 
 // ============================================================================
@@ -356,5 +357,39 @@ export function useExportSession(sessionId: string) {
     queryKey: ANKI_QUERY_KEYS.exportSession(sessionId),
     queryFn: () => ankiApi.exportSessions.get(sessionId),
     enabled: !!sessionId,
+  })
+}
+
+export function useAnkiConfigCheck() {
+  return useQuery({
+    queryKey: ANKI_QUERY_KEYS.configCheck,
+    queryFn: () => ankiApi.config.check(),
+    staleTime: 60 * 1000,
+  })
+}
+
+export function useRateCard() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+
+  return useMutation({
+    mutationFn: ({ cardId, rating }: { cardId: string; rating: number }) =>
+      ankiApi.cards.rate(cardId, rating),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ANKI_QUERY_KEYS.card(variables.cardId) })
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to save card rating',
+        variant: 'destructive',
+      })
+    },
+  })
+}
+
+export function useRecordStudy() {
+  return useMutation({
+    mutationFn: (cardId: string) => ankiApi.cards.recordStudy(cardId),
   })
 }

@@ -10,9 +10,12 @@ Endpoints:
 - CEFR classification
 """
 
+from datetime import datetime
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import httpx
 from fastapi import (
     APIRouter,
     Depends,
@@ -97,6 +100,10 @@ class ExportSessionCreateRequest(BaseModel):
     export_format: str = "apkg"
     include_audio: bool = True
     include_images: bool = True
+
+
+class CardRatingRequest(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
 
 
 # ============================================================================
@@ -595,6 +602,113 @@ async def get_export_session(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/config-check")
+async def get_anki_config_check():
+    """Return health/readiness status for Anki generation dependencies."""
+    ollama_url = "http://localhost:11434"
+    piper_url = "http://localhost:10200"
+    whisper_url = "http://localhost:9000"
+
+    required_models = ["mxbai-embed-large:latest", "qwen2.5:3b"]
+    recommended_models = ["qwen2.5:1.5b", "deepseek-r1:latest"]
+
+    async def _service_status(url: str) -> Dict[str, Optional[str]]:
+        try:
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+            return {"status": "healthy", "error": None}
+        except Exception as e:
+            return {"status": "unhealthy", "error": str(e)}
+
+    ollama_models: List[str] = []
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            tags_response = await client.get(f"{ollama_url}/api/tags")
+            tags_response.raise_for_status()
+            tags = tags_response.json().get("models", [])
+            ollama_models = [entry.get("name", "") for entry in tags if entry.get("name")]
+    except Exception as e:
+        ollama_health = {"status": "unhealthy", "error": str(e)}
+    else:
+        ollama_health = {"status": "healthy", "error": None}
+
+    required_installed = [m for m in required_models if m in ollama_models]
+    required_missing = [m for m in required_models if m not in ollama_models]
+    recommended_installed = [m for m in recommended_models if m in ollama_models]
+
+    piper_health = await _service_status(piper_url)
+    whisper_health = await _service_status(whisper_url)
+
+    return {
+        "ollama": {
+            **ollama_health,
+            "models": ollama_models,
+            "required_installed": required_installed,
+            "required_missing": required_missing,
+            "recommended_installed": recommended_installed,
+        },
+        "recommended_models": {
+            "description": "For high-quality Anki generation, install required models and optionally recommended ones.",
+            "required": required_models,
+            "recommended": recommended_models,
+        },
+        "piper_tts": piper_health,
+        "whisper_stt": whisper_health,
+        "image_apis": {
+            "unsplash": bool(os.environ.get("UNSPLASH_ACCESS_KEY")),
+            "pexels": bool(os.environ.get("PEXELS_API_KEY")),
+            "pixabay": bool(os.environ.get("PIXABAY_API_KEY")),
+        },
+    }
+
+
+@router.post("/cards/{card_id}/rate")
+async def rate_card(card_id: str, request: CardRatingRequest):
+    """Record a study rating (1-5) for a card."""
+    service = AnkiService()
+    card = await service.get_card(card_id)
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    metadata = card.metadata or {}
+    history = metadata.get("study_history", [])
+    history.append({
+        "timestamp": datetime.utcnow().isoformat(),
+        "rating": request.rating,
+    })
+    metadata["study_history"] = history[-300:]
+
+    stats = metadata.get("study_stats", {})
+    stats["ratings_count"] = int(stats.get("ratings_count", 0)) + 1
+    stats["last_rating"] = request.rating
+    stats["last_rated_at"] = datetime.utcnow().isoformat()
+    metadata["study_stats"] = stats
+
+    card.metadata = metadata
+    await card.save()
+    return {"success": True}
+
+
+@router.post("/cards/{card_id}/study")
+async def record_card_study(card_id: str):
+    """Record that a card was shown/reviewed in study mode."""
+    service = AnkiService()
+    card = await service.get_card(card_id)
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    metadata = card.metadata or {}
+    stats = metadata.get("study_stats", {})
+    stats["views_count"] = int(stats.get("views_count", 0)) + 1
+    stats["last_viewed_at"] = datetime.utcnow().isoformat()
+    metadata["study_stats"] = stats
+
+    card.metadata = metadata
+    await card.save()
+    return {"success": True}
+
+
 # ============================================================================
 # AI Card Generation
 # ============================================================================
@@ -604,6 +718,7 @@ class GenerateCardRequest(BaseModel):
     """Request model for AI card generation."""
     source_ids: List[str] = Field(..., description="List of source IDs to use as context")
     user_prompt: str = Field(..., description="User's prompt/instructions for card generation")
+    prompt_template_key: Optional[str] = Field(None, description="Optional key of selected preset")
     model_id: Optional[str] = Field(None, description="Optional model override")
     num_cards: int = Field(1, ge=1, le=10, description="Number of cards to generate")
 
@@ -621,6 +736,119 @@ class GenerateCardResponse(BaseModel):
     """Response containing generated card previews."""
     cards: List[GeneratedCardPreview] = Field(..., description="Generated card previews")
     model_used: str = Field(..., description="Model used for generation")
+
+
+class PromptPresetResponse(BaseModel):
+    """Prompt preset metadata and instructions for prepopulation."""
+    key: str
+    title: str
+    description: str
+    instructions: str
+
+
+class GenerationFeedbackRequest(BaseModel):
+    """Feedback submitted after generation preview."""
+    rating: int = Field(..., ge=1, le=5)
+    feedback_text: Optional[str] = None
+    prompt_template_key: Optional[str] = None
+    user_prompt: str = ""
+    model_id: Optional[str] = None
+    source_ids: List[str] = Field(default_factory=list)
+    num_cards: int = Field(1, ge=1, le=100)
+    generated_cards_count: int = Field(0, ge=0, le=100)
+    accepted_cards_count: int = Field(0, ge=0, le=100)
+
+
+PROMPT_PRESET_FILES: List[Dict[str, str]] = [
+    {
+        "key": "default-general",
+        "title": "Default (General)",
+        "description": "Baseline prompt for broad flashcard generation.",
+        "filename": "anki_card_generation.jinja",
+    },
+    {
+        "key": "dutch-a2",
+        "title": "Dutch A2",
+        "description": "Prepared prompt for A2 Dutch vocabulary practice.",
+        "filename": "anki_transformation_dutch_a2.jinja",
+    },
+    {
+        "key": "dutch-b1",
+        "title": "Dutch B1",
+        "description": "Prepared prompt for B1 Dutch vocabulary practice.",
+        "filename": "anki_transformation_dutch_b1.jinja",
+    },
+    {
+        "key": "dutch-b2",
+        "title": "Dutch B2",
+        "description": "Prepared prompt for B2 Dutch vocabulary practice.",
+        "filename": "anki_transformation_dutch_b2.jinja",
+    },
+    {
+        "key": "dutch-c1",
+        "title": "Dutch C1",
+        "description": "Prepared prompt for C1 Dutch vocabulary practice.",
+        "filename": "anki_transformation_dutch_c1.jinja",
+    },
+    {
+        "key": "dutch-c2",
+        "title": "Dutch C2",
+        "description": "Prepared prompt for C2 Dutch vocabulary practice.",
+        "filename": "anki_transformation_dutch_c2.jinja",
+    },
+]
+
+
+def _load_prompt_text(prompt_filename: str) -> str:
+    repo_root = Path(__file__).resolve().parents[2]
+    prompt_path = repo_root / "prompts" / prompt_filename
+
+    if not prompt_path.exists():
+        logger.warning(f"Prompt preset file not found: {prompt_path}")
+        return ""
+
+    try:
+        return prompt_path.read_text(encoding="utf-8").strip()
+    except Exception as e:
+        logger.warning(f"Failed to read prompt preset {prompt_filename}: {e}")
+        return ""
+
+
+@router.get("/prompt-presets", response_model=List[PromptPresetResponse])
+async def get_prompt_presets():
+    """Return prepared prompt presets for prepopulating generation instructions."""
+    return [
+        PromptPresetResponse(
+            key=preset["key"],
+            title=preset["title"],
+            description=preset["description"],
+            instructions=_load_prompt_text(preset["filename"]),
+        )
+        for preset in PROMPT_PRESET_FILES
+    ]
+
+
+@router.post("/feedback/generation")
+async def submit_generation_feedback(request: GenerationFeedbackRequest):
+    """Persist post-generation quality feedback for iterative prompt/process improvement."""
+    service = AnkiService()
+    service.record_generation_feedback(
+        rating=request.rating,
+        feedback_text=request.feedback_text,
+        prompt_template_key=request.prompt_template_key,
+        user_prompt=request.user_prompt,
+        model_id=request.model_id,
+        source_ids=request.source_ids,
+        num_cards=request.num_cards,
+        generated_cards_count=request.generated_cards_count,
+        accepted_cards_count=request.accepted_cards_count,
+    )
+
+    return {
+        "success": True,
+        "recorded_at": datetime.utcnow().isoformat(),
+        "message": "Feedback saved and will influence future generation guidance.",
+    }
 
 
 @router.post("/decks/{deck_id}/generate-cards", response_model=GenerateCardResponse)
