@@ -16,23 +16,35 @@
 </head>
 <body>
   <h1>Open Notebook Service Navigator</h1>
-  <p>Use this page when you don’t remember the exact service URL.</p>
+  <p>
+    Install LAN certificate once to remove browser security warnings:
+    <a id="ca-http" href="#" target="_blank" rel="noopener">Download LAN CA (HTTP)</a>
+    ·
+    <a id="ca-https" href="#" target="_blank" rel="noopener">Download LAN CA (HTTPS)</a>
+  </p>
+  <p class="muted">
+    Windows: open the downloaded <strong>root.crt</strong> and install to <strong>Trusted Root Certification Authorities</strong> (Local Machine).
+    Android: copy cert to device then go to <strong>Settings → Security → Encryption & credentials → Install a certificate → CA certificate</strong>.
+  </p>
   <ul id="links"></ul>
 
   <script>
     const host = window.location.hostname || 'localhost';
+    document.getElementById('ca-http').href = `http://${host}:8088/lan-ca.crt`;
+    document.getElementById('ca-https').href = `https://${host}/lan-ca.crt`;
     const services = [
-      { name: 'Open Notebook UI', url: () => `http://${host}:8502`, note: 'Main app' },
-      { name: 'Open Notebook API', url: () => `http://${host}:5055`, note: 'REST API' },
-      { name: 'Open Notebook API Docs', url: () => `http://${host}:5055/docs`, note: 'Swagger docs' },
-      { name: 'Anki UI', url: () => `http://${host}:8503/anki`, note: 'Standalone Anki app' },
-      { name: 'Anki API', url: () => `http://${host}:5056`, note: 'Standalone Anki backend' },
-      { name: 'Anki API Docs', url: () => `http://${host}:5056/docs`, note: 'Standalone API docs' },
+      { name: 'Open Notebook UI (HTTPS)', url: () => `https://${host}`, note: 'Main app (secure LAN cert)' },
+      { name: 'Open Notebook API (HTTPS)', url: () => `https://${host}/api`, note: 'REST API via Caddy' },
+      { name: 'Open Notebook API Docs (HTTPS)', url: () => `https://${host}/api/docs`, note: 'Swagger docs via Caddy' },
+      { name: 'Anki UI (HTTPS)', url: () => `https://${host}/anki`, note: 'Standalone Anki app via Caddy' },
+      { name: 'Anki API (HTTPS)', url: () => `https://${host}/anki-api`, note: 'Standalone Anki backend via Caddy' },
+      { name: 'Anki API Docs (HTTPS)', url: () => `https://${host}/anki-api/docs`, note: 'Standalone API docs via Caddy' },
       { name: 'Project Docs (GitHub)', url: () => 'https://github.com/lfnovo/open-notebook/tree/main/docs', note: 'Documentation index' },
-      { name: 'Stirling PDF', url: () => `http://${host}:8080`, note: 'PDF tools' },
-      { name: 'Ollama', url: () => `http://${host}:11435`, note: 'Model server (container)' },
-      { name: 'Whisper', url: () => `http://${host}:9000`, note: 'Speech-to-text' },
-      { name: 'Piper', url: () => `http://${host}:10200`, note: 'Text-to-speech' }
+      { name: 'Stirling PDF (HTTPS)', url: () => `https://${host}/stirling`, note: 'PDF tools via Caddy' },
+      { name: 'Ollama (HTTPS)', url: () => `https://${host}/ollama`, note: 'Model API via Caddy' },
+      { name: 'Whisper (HTTPS)', url: () => `https://${host}/whisper`, note: 'Speech-to-text via Caddy' },
+      { name: 'Piper', url: () => `http://${host}:10200`, note: 'Text-to-speech' },
+      { name: 'Music Partner UI (HTTPS)', url: () => `https://${host}:4444`, note: 'Standalone Music Partner app via Caddy' },
     ];
 
     const list = document.getElementById('links');

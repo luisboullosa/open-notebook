@@ -1,0 +1,107 @@
+{
+	admin off
+	servers {
+		protocols h1 h2
+	}
+}
+
+# Dedicated HTTP endpoint for downloading LAN CA cert before trust is installed.
+:8088 {
+	handle /lan-ca.crt {
+		root * /certs/lan
+		rewrite * /lan-ca.crt
+		header Content-Type application/x-x509-ca-cert
+		file_server
+	}
+
+	handle /lan-ca.crl {
+		root * /certs/lan
+		rewrite * /lan-ca.crl
+		header Content-Type application/pkix-crl
+		file_server
+	}
+
+	handle {
+		respond "Use /lan-ca.crt" 404
+	}
+}
+
+# LAN-only HTTPS using Caddy internal CA.
+# Access from clients with: https://192.168.2.129
+https://:443 {
+	tls /certs/lan/lan-server.crt /certs/lan/lan-server.key
+
+	# Anki UI (standalone frontend on host port 8503)
+	handle /anki* {
+		reverse_proxy host.docker.internal:8503
+	}
+
+	# Anki API (standalone backend on host port 5056)
+	handle_path /anki-api* {
+		reverse_proxy host.docker.internal:5056
+	}
+
+	# Stirling PDF (standalone frontend on host port 8080)
+	handle_path /stirling* {
+		reverse_proxy host.docker.internal:8080
+	}
+
+	# Ollama HTTP API
+	handle_path /ollama* {
+		reverse_proxy ollama:11434
+	}
+
+	# Whisper web service
+	handle_path /whisper* {
+		reverse_proxy whisper:9000
+	}
+
+	# HTTPS endpoint for downloading LAN CA cert (after trust or bypass)
+	handle /lan-ca.crt {
+		root * /certs/lan
+		rewrite * /lan-ca.crt
+		header Content-Type application/x-x509-ca-cert
+		file_server
+	}
+
+	# HTTPS endpoint for downloading LAN CA CRL
+	handle /lan-ca.crl {
+		root * /certs/lan
+		rewrite * /lan-ca.crl
+		header Content-Type application/pkix-crl
+		file_server
+	}
+
+	# API routing
+	handle /api/* {
+		reverse_proxy open_notebook:5055
+	}
+
+	# Frontend routing
+	handle {
+		reverse_proxy open_notebook:8502
+	}
+
+	encode gzip
+
+	log {
+		output stdout
+		format console
+		level INFO
+	}
+}
+
+# Music Partner as dedicated HTTPS virtual endpoint (root path)
+https://:4444 {
+	tls /certs/lan/lan-server.crt /certs/lan/lan-server.key
+
+	reverse_proxy host.docker.internal:8504
+
+	encode gzip
+
+	log {
+		output stdout
+		format console
+		level INFO
+	}
+}

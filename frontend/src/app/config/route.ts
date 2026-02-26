@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function GET(request: NextRequest) {
   // Priority 1: Check if API_URL is explicitly set
   const envApiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL
+  const apiPort = process.env.API_PORT || '5055'
 
   if (envApiUrl) {
     return NextResponse.json({
@@ -44,11 +45,17 @@ export async function GET(request: NextRequest) {
     const hostHeader = request.headers.get('host')
 
     if (hostHeader) {
-      // Extract just the hostname (remove port if present)
-      const hostname = hostHeader.split(':')[0]
+      let apiUrl: string
 
-      // Construct the API URL with port 5055
-      const apiUrl = `${proto}://${hostname}:5055`
+      // If request is already HTTPS (typically through reverse proxy),
+      // use same-origin so API requests flow through the TLS endpoint.
+      if (proto === 'https') {
+        apiUrl = `https://${hostHeader}`
+      } else {
+        // For HTTP/LAN direct access keep legacy behavior on API_PORT.
+        const hostname = hostHeader.split(':')[0]
+        apiUrl = `${proto}://${hostname}:${apiPort}`
+      }
 
       console.log(`[runtime-config] Auto-detected API URL: ${apiUrl} (proto=${proto}, host=${hostHeader})`)
 

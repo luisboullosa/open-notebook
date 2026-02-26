@@ -2,6 +2,25 @@
 # Based on docker-compose.dev.yml but adapted to bind services to 0.0.0.0
 
 services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+      - "0.0.0.0:4444:4444"
+      - "0.0.0.0:8088:8088"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./Caddyfile.lan:/etc/caddy/Caddyfile:ro
+      - ./letsencrypt:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      open_notebook:
+        condition: service_started
+    restart: unless-stopped
+
   surrealdb:
     image: surrealdb/surrealdb:v2
     volumes:
@@ -93,8 +112,8 @@ services:
   open_notebook:
     image: lfnovo/open_notebook:v1-latest-single
     ports:
-      - "8502:8502"
-      - "5055:5055"
+      - "127.0.0.1:8502:8502"
+      - "127.0.0.1:5055:5055"
     env_file:
       - ./docker.env
     depends_on:
@@ -109,6 +128,7 @@ services:
     volumes:
       - ./notebook_data:/app/data
     environment:
+      - API_URL=https://192.168.2.129
       - SURREAL_URL=ws://surrealdb:8000
       - OLLAMA_BASE_URL=http://ollama:11434
       - WHISPER_API_URL=http://whisper:9000
@@ -118,6 +138,8 @@ services:
     command: ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
 volumes:
+  caddy_data:
+  caddy_config:
   ollama_data:
   whisper-models:
   piper-data:
