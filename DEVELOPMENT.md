@@ -338,3 +338,4 @@ npm run lint
 - See [MIGRATION.md](MIGRATION.md) for database migrations
 - See [CONTRIBUTING.md](CONTRIBUTING.md) for code style and PRs
 - See [ORANGEPI_DEPLOYMENT.md](ORANGEPI_DEPLOYMENT.md) for production deployment
+- See [docs/deployment/lan-https.md](docs/deployment/lan-https.md) for secure LAN HTTPS setup

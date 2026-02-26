@@ -50,6 +50,13 @@ This section provides comprehensive guides for deploying Open Notebook in differ
 - Embedding provider failure recovery
 - Performance tuning and monitoring
 
+### 7. [LAN HTTPS (Orange Pi/Home Lab)](lan-https.md)
+**For secure local-network access without public exposure**
+- Caddy reverse proxy for LAN IP access
+- Local CA + server cert workflow
+- Windows and Android trust setup
+- CRL-enabled setup for Schannel compatibility
+
 ## 🎯 Choose Your Deployment Method
 
 ### Use Docker Setup if:

@@ -1,5 +1,8 @@
 # Orange Pi Deployment Guide
 
+> For secure LAN HTTPS setup (Windows/Android certificate trust + CRL), use:
+> [docs/deployment/lan-https.md](docs/deployment/lan-https.md)
+
 ## Prerequisites
 - Orange Pi with Ubuntu/Armbian (ARM64)
 - Docker and Docker Compose installed
@@ -44,8 +47,9 @@ ssh user@orangepi-ip
 # Navigate to project
 cd ~/open-notebook
 
-# Use Orange Pi configuration
-cp docker-compose.orangepi.yml docker-compose.yml
+# Use Orange Pi development configuration
+# (includes SurrealDB + API + frontend + service navigator)
+cp docker-compose.orangepi.dev.yml docker-compose.yml
 cp docker.orangepi.env docker.env
 
 # Edit docker.env to set your Orange Pi's LAN IP (optional)
@@ -114,6 +118,7 @@ services:
 - No port forwarding needed
 - Access only from local network
 - Most secure, no internet exposure
+- Optional: enable LAN HTTPS with [docs/deployment/lan-https.md](docs/deployment/lan-https.md)
 
 ### Option 2: Public HTTPS Access
 1. Update DuckDNS to point to your public IP
@@ -122,6 +127,10 @@ services:
 4. Keep original `Caddyfile`
 
 ## Troubleshooting
+
+For certificate trust and HTTPS browser issues on LAN clients, see:
+
+- [docs/deployment/lan-https.md](docs/deployment/lan-https.md)
 
 ### Check ARM64 Image Support
 ```bash

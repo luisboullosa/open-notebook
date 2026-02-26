@@ -295,6 +295,10 @@ Or provide it when logging into the web interface.
 - `Connection error` when using HTTPS endpoints
 - Works with HTTP but fails with HTTPS
 
+For LAN HTTPS deployments on Orange Pi/Home Lab (including Windows/Android trust + CRL), see:
+
+- [LAN HTTPS Deployment Guide](../deployment/lan-https.md)
+
 **Cause**: Python's SSL verification uses the `certifi` package certificate store, not the system's certificate store. Self-signed certificates are not trusted by default.
 
 **Solutions**:

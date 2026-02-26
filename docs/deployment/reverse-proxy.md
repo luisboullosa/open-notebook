@@ -2,6 +2,9 @@
 
 This guide helps you deploy Open Notebook behind a reverse proxy (nginx, Caddy, Traefik, etc.) or with a custom domain.
 
+> For local-network IP-based HTTPS (Orange Pi/Home Lab), use the dedicated guide:
+> [LAN HTTPS Deployment](lan-https.md)
+
 ## ⭐ Simplified Configuration (v1.1+)
 
 Starting with v1.1, Open Notebook uses Next.js rewrites to dramatically simplify reverse proxy configuration. **You now only need to proxy to port 8502** - Next.js handles internal API routing automatically.
@@ -89,6 +92,8 @@ API_URL=https://your-domain.com
 # Default is http://localhost:5055 (single-container)
 # INTERNAL_API_URL=http://api-service:5055
 ```
+
+Do not append `/api` to `API_URL`; Open Notebook appends API paths automatically.
 
 ### Optional: Direct API Access for External Integrations
 

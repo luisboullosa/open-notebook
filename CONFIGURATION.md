@@ -65,7 +65,7 @@ docker run -e API_URL=http://your-server-ip:5055 \
 
 2. **Use the externally accessible URL**: The `API_URL` should be the URL that a browser can reach, not internal Docker networking addresses.
 
-3. **Protocol matters**: Use `http://` for local deployments, `https://` if you've set up SSL.
+3. **Protocol matters**: Use `http://` for local deployments, `https://` for reverse proxy or LAN HTTPS setups.
 
 ### Examples
 
@@ -76,7 +76,7 @@ API_URL=http://192.168.1.100:5055
 
 #### Running on a custom domain with SSL
 ```env
-API_URL=https://notebook.example.com/api
+API_URL=https://notebook.example.com
 ```
 
 #### Running on a custom port
@@ -97,6 +97,11 @@ API_URL=http://localhost:3055
 1. Check browser console for CORS errors
 2. Verify `API_URL` is set correctly
 3. Make sure you're using the same protocol (http/https) throughout
+
+### Related Guides
+
+- Reverse proxy setups: [docs/deployment/reverse-proxy.md](docs/deployment/reverse-proxy.md)
+- LAN HTTPS (Orange Pi/Home Lab): [docs/deployment/lan-https.md](docs/deployment/lan-https.md)
 
 ### Migration from Previous Versions
 

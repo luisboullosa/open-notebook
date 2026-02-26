@@ -234,6 +234,18 @@ open-notebook/
 | **"404" or "config endpoint" errors** | Don't add `/api` to `API_URL` - use just `http://your-ip:5055` |
 | **Still having issues?** | Check our [5-minute troubleshooting guide](docs/troubleshooting/quick-fixes.md) or [join Discord](https://discord.gg/37XJPXfz2w) |
 
+### 🔐 LAN HTTPS (Orange Pi / Home Lab)
+
+For secure local-network access (including Windows + Android trust setup), use the dedicated guide:
+
+- [LAN HTTPS Deployment Guide](docs/deployment/lan-https.md)
+
+This setup includes:
+
+- Caddy-based LAN HTTPS routing
+- Local CA certificate distribution
+- Revocation list (CRL) support for Windows Schannel compatibility
+
 ### How Open Notebook Works
 
 ```

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Dedicated LAN HTTPS deployment guide for Orange Pi/Home Lab, including Windows and Android trust setup (`docs/deployment/lan-https.md`)
+- Caddy LAN reverse-proxy configuration to front Open Notebook and related local services via HTTPS (`Caddyfile.lan`)
+- Local CA certificate and CRL distribution endpoints for client trust + revocation checks (`/lan-ca.crt`, `/lan-ca.crl`)
+
+### Changed
+- Orange Pi dev compose now includes Caddy LAN HTTPS routing and cert mounts (`docker-compose.orangepi.dev.yml`)
+- Service navigator links updated to prefer secure LAN endpoints where applicable
+
+### Fixed
+- Windows Schannel TLS failures for LAN certs by adding revocation-aware certificate workflow
+
 ## [1.2.4] - 2025-12-14
 
 ### Added

@@ -57,6 +57,7 @@ Complete deployment guides for all scenarios.
 - **[Docker](deployment/docker.md)** - Multi-container setup
 - **[Single Container](deployment/single-container.md)** - Simplified deployment
 - **[Development](deployment/development.md)** - Source code setup
+- **[LAN HTTPS](deployment/lan-https.md)** - Secure local-network access (Orange Pi/Home Lab)
 - **[Security](deployment/security.md)** - Production security
 - **[Retry Configuration](deployment/retry-configuration.md)** - Background job reliability
 
