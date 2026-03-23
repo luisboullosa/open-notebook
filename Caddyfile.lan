@@ -46,9 +46,14 @@ https://:443 {
 		reverse_proxy host.docker.internal:8080
 	}
 
-	# Ollama HTTP API
-	handle_path /ollama* {
-		reverse_proxy ollama:11434
+	# LLM API (rk-llama.cpp chat on host port 8081)
+	handle_path /llm/* {
+		reverse_proxy host.docker.internal:8081
+	}
+
+	# Embedding API (rk-llama.cpp embedding on host port 8082)
+	handle_path /embed/* {
+		reverse_proxy host.docker.internal:8082
 	}
 
 	# Whisper web service

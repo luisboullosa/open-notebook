@@ -1,0 +1,20 @@
+[Unit]
+Description=llama-server embeddings (mxbai-embed-large)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/projects/rk-llama.cpp/build/bin/llama-server \
+    --host 0.0.0.0 \
+    --port 8082 \
+    --embedding \
+    -hf ChristianAzinn/mxbai-embed-large-v1-gguf:Q8_0 \
+    -a mxbai-embed-large \
+    --ctx-size 512 \
+    --no-warmup
+Restart=on-failure
+RestartSec=5
+Environment=GGML_RKNPU2=1
+
+[Install]
+WantedBy=multi-user.target

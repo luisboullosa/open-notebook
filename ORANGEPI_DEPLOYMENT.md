@@ -81,19 +81,32 @@ docker-compose logs -f
 ### Use Lighter Models
 The configuration already uses:
 - Whisper: `tiny` model (fastest for ARM)
-- Piper: `low` quality voice (faster processing)
+- Speaches + Kokoro-82M (lightweight local TTS)
 
-### Ollama Model Recommendations
+### Ollama-Compatible (RKLLama) Model Recommendations
 ```bash
-# SSH into Orange Pi
-docker exec -it open-notebook-ollama-1 bash
+# Pull small, efficient models via the Ollama-compatible API
+curl -X POST http://127.0.0.1:11435/api/pull -H "Content-Type: application/json" -d '{"model":"phi3:mini","stream":false}'
+curl -X POST http://127.0.0.1:11435/api/pull -H "Content-Type: application/json" -d '{"model":"gemma2:2b","stream":false}'
+curl -X POST http://127.0.0.1:11435/api/pull -H "Content-Type: application/json" -d '{"model":"qwen2.5:1.5b","stream":false}'
 
-# Install small, efficient models
-ollama pull phi3:mini        # 2.3GB, fast
-ollama pull gemma2:2b        # 1.6GB, very fast
-ollama pull qwen2.5:1.5b     # 1GB, extremely fast
+# Verify available models
+curl http://127.0.0.1:11435/api/tags
 
 # Avoid large models like llama3:70b (too slow on Orange Pi)
+```
+
+> Note: The Orange Pi compose includes a startup migration step that attempts to import model names discovered in the legacy Ollama data volume (`ollama_data`) into RKLLama. This is best-effort; models that fail auto-migration must be added manually.
+
+### Verify Migration Status (One Command)
+```bash
+cd ~/open-notebook
+sh scripts/verify_rkllama_migration.sh
+```
+
+Optional custom endpoints/paths:
+```bash
+sh scripts/verify_rkllama_migration.sh http://127.0.0.1:11435 /root/.ollama/models/manifests
 ```
 
 ### Limit Resources (if needed)
@@ -153,7 +166,7 @@ docker stop open-notebook-ollama-1
 
 ### Slow Performance
 - Use smaller Whisper model: `base` → `tiny`
-- Use smaller Ollama models
+- Use smaller Ollama-compatible models
 - Reduce WORKER_CONCURRENCY in docker.env
 - Consider disabling services you don't use
 

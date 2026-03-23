@@ -1,0 +1,19 @@
+[Unit]
+Description=llama-server chat (gemma-3-1b-it)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/projects/rk-llama.cpp/build/bin/llama-server \
+    --host 0.0.0.0 \
+    --port 8081 \
+    -m /root/projects/models/gemma-3-1b-it-Q8_0.gguf \
+    -a gemma-3-1b-it \
+    --ctx-size 4096 \
+    --no-warmup
+Restart=on-failure
+RestartSec=5
+Environment=GGML_RKNPU2=1
+
+[Install]
+WantedBy=multi-user.target
