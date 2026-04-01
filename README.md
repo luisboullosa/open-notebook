@@ -246,6 +246,17 @@ This setup includes:
 - Local CA certificate distribution
 - Revocation list (CRL) support for Windows Schannel compatibility
 
+## Repository Layout
+
+This repository now follows a simple boundary:
+
+- Core Open Notebook stays in the normal upstream structure: `api/`, `open_notebook/`, `frontend/`, `docs/`, and the standard compose/Caddy files.
+- Upstream Orange Pi support stays where the project already expects it: `docker-compose.orangepi.dev.yml`, `Caddyfile.lan`, and the shell scripts in `scripts/`.
+- Local customizations live under `local-addons/` so they do not keep leaking into the core app tree.
+- Local Anki notes and supporting materials live under `anki/`; the production Anki implementation still lives in the normal app folders.
+
+If you are working on the local Orange Pi / CDISC setup, start with [local-addons/README.md](local-addons/README.md) and [ORANGEPI_DEPLOYMENT.md](ORANGEPI_DEPLOYMENT.md).
+
 ### How Open Notebook Works
 
 ```

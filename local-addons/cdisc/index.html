@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CDISC Dummy Data Generator</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <div class="title">⚗ CDISC DUMMY DATA GENERATOR</div>
+    <div class="subtitle">Clinical Research Pipeline Scaffolding Tool</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Project Setup</div>
+
+    <label class="lbl">Project / Study Name</label>
+    <input id="projectName" placeholder="STUDY001" value="STUDY001" />
+
+    <label class="lbl">Brief Description (optional)</label>
+    <textarea id="description" rows="3" placeholder="Study title, therapeutic area, phase, sponsor…"></textarea>
+
+    <div class="row">
+      <div style="flex:1">
+        <label class="lbl">Output Language</label>
+        <div class="chips">
+          <button id="langR" class="chip active">R</button>
+          <button id="langPy" class="chip">Python</button>
+        </div>
+      </div>
+      <div style="flex:1">
+        <label class="lbl">Number of Subjects (N)</label>
+        <input id="nSubjects" type="number" min="5" max="999" value="50" />
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <button id="generateBtn" class="generate">▶ GENERATE PROJECT</button>
+    </div>
+
+    <div id="statusBox" class="status" style="display:none"></div>
+    <div id="resultBox" class="result" style="display:none"></div>
+  </div>
+  
+</div>
+<script src="main.js"></script>
+</body>
+</html>

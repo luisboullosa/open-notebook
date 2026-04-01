@@ -1,0 +1,117 @@
+{
+	admin off
+	servers {
+		protocols h1 h2
+	}
+}
+
+:8088 {
+	handle /lan-ca.crt {
+		root * /certs/lan
+		rewrite * /lan-ca.crt
+		header Content-Type application/x-x509-ca-cert
+		file_server
+	}
+
+	handle /lan-ca.crl {
+		root * /certs/lan
+		rewrite * /lan-ca.crl
+		header Content-Type application/pkix-crl
+		file_server
+	}
+
+	handle {
+		respond "Use /lan-ca.crt" 404
+	}
+}
+
+https://:443 {
+	tls /certs/lan/lan-server.crt /certs/lan/lan-server.key
+
+	handle /anki* {
+		reverse_proxy host.docker.internal:8503
+	}
+
+	handle_path /anki-api* {
+		reverse_proxy host.docker.internal:5056
+	}
+
+	handle_path /stirling* {
+		reverse_proxy host.docker.internal:8080
+	}
+
+	handle_path /llm/* {
+		reverse_proxy host.docker.internal:8081
+	}
+
+	handle_path /embed/* {
+		reverse_proxy host.docker.internal:8082
+	}
+
+	handle_path /whisper* {
+		reverse_proxy whisper:9000
+	}
+
+	handle /lan-ca.crt {
+		root * /certs/lan
+		rewrite * /lan-ca.crt
+		header Content-Type application/x-x509-ca-cert
+		file_server
+	}
+
+	handle /lan-ca.crl {
+		root * /certs/lan
+		rewrite * /lan-ca.crl
+		header Content-Type application/pkix-crl
+		file_server
+	}
+
+	handle /api/* {
+		reverse_proxy open_notebook:5055 {
+			header_up Authorization "Bearer 6596011"
+			header_up X-Forwarded-Proto {http.request.scheme}
+			header_up X-Forwarded-Host {http.request.host}
+		}
+	}
+
+	handle /cdisc/api/* {
+		uri strip_prefix /cdisc
+		reverse_proxy cdisc_api:5056 {
+			header_up Authorization "Bearer 6596011"
+			header_up X-Forwarded-Proto {http.request.scheme}
+			header_up X-Forwarded-Host {http.request.host}
+		}
+	}
+
+	handle_path /cdisc* {
+		reverse_proxy cdisc_frontend:80
+	}
+
+	redir /cdisc /cdisc/ 308
+
+	handle {
+		reverse_proxy open_notebook:8502
+	}
+
+	encode gzip
+
+	log {
+		output stdout
+		format console
+		level INFO
+	}
+}
+
+https://:4444 {
+	tls /certs/lan/lan-server.crt /certs/lan/lan-server.key
+
+	reverse_proxy host.docker.internal:8504
+
+	encode gzip
+
+	log {
+		output stdout
+		format console
+		level INFO
+	}
+}

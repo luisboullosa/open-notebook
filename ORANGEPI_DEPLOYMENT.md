@@ -76,6 +76,19 @@ docker-compose logs -f
 - **From same network:** `http://orangepi-ip:8502`
 - **Example:** `http://192.168.1.100:8502`
 
+## Optional Local Addons
+
+The base Orange Pi setup in this repository is the upstream Open Notebook deployment. Local customizations such as the CDISC dummy-data generator are kept separately under `local-addons/`.
+
+If you want the local CDISC addon on top of the base Orange Pi deployment:
+
+1. Use the base deployment as documented above.
+2. Review [local-addons/README.md](local-addons/README.md).
+3. Use `local-addons/deploy/docker-compose.orangepi.addons.yml` for the addon services.
+4. Use `local-addons/deploy/Caddyfile.lan.cdisc` as the deployed Caddy LAN config when you want the `/cdisc` route enabled.
+
+This keeps the upstream Open Notebook stack intact while letting Orange Pi-specific local extensions evolve separately.
+
 ## Performance Optimization
 
 ### Use Lighter Models

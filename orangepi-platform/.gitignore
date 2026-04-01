@@ -1,0 +1,8 @@
+env/open-notebook.env
+runtime/notebook_data/
+runtime/surreal_data/
+runtime/letsencrypt/
+runtime/.secrets/
+runtime/local_backups/
+runtime/uploads/
+*.log

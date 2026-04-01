@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orange Pi Notebook Services</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; background: #f7f7f9; color: #111; }
+    h1 { margin-bottom: 0.3rem; }
+    p { color: #444; }
+    ul { list-style: none; padding: 0; max-width: 760px; }
+    li { background: #fff; margin: 0.5rem 0; padding: 0.8rem 1rem; border: 1px solid #ddd; border-radius: 8px; }
+    a { text-decoration: none; font-weight: 600; color: #0b57d0; }
+    .muted { font-size: 0.9rem; color: #666; margin-left: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>Orange Pi Notebook Service Navigator</h1>
+  <p>
+    Install the LAN certificate once to remove browser trust warnings:
+    <a id="ca-http" href="#" target="_blank" rel="noopener">Download LAN CA (HTTP)</a>
+    ·
+    <a id="ca-https" href="#" target="_blank" rel="noopener">Download LAN CA (HTTPS)</a>
+  </p>
+  <ul id="links"></ul>
+
+  <script>
+    const host = window.location.hostname || 'localhost';
+    document.getElementById('ca-http').href = `http://${host}:8088/lan-ca.crt`;
+    document.getElementById('ca-https').href = `https://${host}/lan-ca.crt`;
+    const services = [
+      { name: 'Open Notebook UI', url: () => `https://${host}`, note: 'Main app via Caddy' },
+      { name: 'Open Notebook API', url: () => `https://${host}/api`, note: 'REST API via Caddy' },
+      { name: 'Open Notebook API Docs', url: () => `https://${host}/api/docs`, note: 'Swagger docs via Caddy' },
+      { name: 'Stirling PDF', url: () => `https://${host}/stirling`, note: 'PDF tools via Caddy' },
+      { name: 'LLM API', url: () => `https://${host}/llm`, note: 'rk-llama chat endpoint' },
+      { name: 'Embedding API', url: () => `https://${host}/embed`, note: 'rk-llama embedding endpoint' },
+      { name: 'Whisper API', url: () => `https://${host}/whisper`, note: 'Speech-to-text service' },
+      { name: 'Music Partner', url: () => `https://${host}:4444`, note: 'Dedicated HTTPS endpoint' }
+    ];
+
+    const list = document.getElementById('links');
+    services.forEach((service) => {
+      const url = service.url();
+      const li = document.createElement('li');
+      li.innerHTML = `<a href="${url}" target="_blank" rel="noopener">${service.name}</a><span class="muted">${url} · ${service.note}</span>`;
+      list.appendChild(li);
+    });
+  </script>
+</body>
+</html>

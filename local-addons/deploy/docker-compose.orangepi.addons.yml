@@ -1,0 +1,22 @@
+services:
+  cdisc_frontend:
+    build:
+      context: ./local-addons/cdisc
+      dockerfile: Dockerfile
+    ports:
+      - "3005:80"
+    restart: always
+    depends_on:
+      - open_notebook
+
+  cdisc_api:
+    build:
+      context: ./local-addons/cdisc/api
+      dockerfile: Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - OLLAMA_BASE=http://host.docker.internal:11435
+    restart: unless-stopped
+    depends_on:
+      - caddy
